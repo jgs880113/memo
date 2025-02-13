@@ -2,24 +2,22 @@
 CREATE TABLE TEST
 (
     OCCR_DT String,
-    PKT_SEQ String,  -- 고유값
+    PKT_SEQ String, 
     TMSTART String,
     STRTITLE String,
     SIP String,
     DIP String,
     COUNT String,
 
-
     INDEX idx_dt OCCR_DT TYPE set(1000) GRANULARITY 4,
-
     INDEX idx_title STRTITLE TYPE set(1000) GRANULARITY 4,
-
     INDEX idx_sip SIP TYPE set(1000) GRANULARITY 4,
     INDEX idx_dip DIP TYPE set(1000) GRANULARITY 4
 )
 ENGINE = MergeTree
-PARTITION BY toYYYYMMDD(toDateTime(OCCR_DT, 'YYYYMMDDHHmm')) 
+PARTITION BY toYYYYMMDD(toDateTime(OCCR_DT, 'Asia/Seoul')) 
 ORDER BY (OCCR_DT, STRTITLE, PKT_SEQ, TMSTART);
+
 
 
 ALTER TABLE test ADD INDEX idx_sip (SIP) TYPE set(1000) GRANULARITY 4;
