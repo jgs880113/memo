@@ -48,3 +48,21 @@ MergeTree 테이블에 데이터 삽입 시 자동으로 최적화를 수행할�
 
 압축되지 않은 데이터를 캐시에 저장할지 여부를 설정합니다.
 활성화하면 캐시 hit
+
+
+<config>
+    <max_threads>64</max_threads>
+    <query_cache_size>104857600</query_cache_size>
+    <data_transfer_max_block_size>2097152</data_transfer_max_block_size>
+    <max_memory_usage>21474836480</max_memory_usage>
+    <max_read_buffer_size>2097152</max_read_buffer_size>
+    <background_pool_size>16</background_pool_size>
+
+    <merge_tree>
+        <max_parts_to_merge_at_once>10</max_parts_to_merge_at_once>
+        <min_rows_to_merge>1000000</min_rows_to_merge>
+    </merge_tree>
+
+    <use_uncompressed_cache>1</use_uncompressed_cache>
+
+</config>
