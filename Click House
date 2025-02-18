@@ -66,3 +66,7 @@ MergeTree 테이블에 데이터 삽입 시 자동으로 최적화를 수행할�
     <use_uncompressed_cache>1</use_uncompressed_cache>
 
 </config>
+
+
+SHOW SETTINGS;
+SHOW SETTINGS LIKE '%max_threads%';
