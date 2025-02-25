@@ -1,0 +1,15 @@
+CREATE TABLE test_local
+(
+    id UInt64,
+    name String,
+    date Date
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(date)
+ORDER BY (date, id);
+
+CREATE TABLE test_distributed
+(
+    id UInt64,
+    name String,
+    date Date
+) ENGINE = Distributed(my_cluster, default, test_local, rand());
