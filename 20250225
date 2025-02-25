@@ -23,3 +23,30 @@ Projection을 강제 적용하여 실행할 수도 있음
 SET allow_experimental_projection_optimization = 1;
 
 ALTER TABLE TEST MODIFY SETTING index_granularity = 128;
+
+
+CREATE DICTIONARY test_ip_dict
+(
+    IP String,
+    TITLE String
+)
+PRIMARY KEY IP
+SOURCE(CLICKHOUSE(TABLE 'TEST_IP_JOIN'))  -- 기존 테이블을 데이터 소스로 사용
+LAYOUT(HASHED())  -- 빠른 조회를 위한 해시 기반 저장 방식
+LIFETIME(MIN 60 MAX 300);  -- 1~5분마다 자동 갱신
+
+
+WITH T AS (
+	SELECT *,
+           dictGet('test_ip_dict', 'TITLE', SIP) AS SIP_TITLE,
+           dictGet('test_ip_dict', 'TITLE', DIP) AS DIP_TITLE
+  	FROM TEST
+  	WHERE OCCR_DT LIKE '202412%' 
+	  AND OCCR_DT >= '202412010000' 
+	  AND OCCR_DT <= '202412110000'
+  	  AND STRTITLE = 'ATTACK'
+)
+SELECT *
+FROM T
+ORDER BY TMSTART DESC, OCCR_DT DESC, PKT_SEQ DESC
+LIMIT 100000;
