@@ -15,3 +15,5 @@ ALTER TABLE TEST ADD PROJECTION proj_default
            -toInt64(OCCR_DT) AS rev_OCCR_DT  
     ORDER BY (rev_TMSTART, rev_OCCR_DT, PKT_SEQ)
 );
+
+ALTER TABLE TEST MODIFY SETTING index_granularity = 128;
