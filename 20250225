@@ -16,4 +16,10 @@ ALTER TABLE TEST ADD PROJECTION proj_default
     ORDER BY (rev_TMSTART, rev_OCCR_DT, PKT_SEQ)
 );
 
+Projection 강제 사용
+
+일부 경우 ClickHouse가 Projection을 자동 선택하지 않을 수 있으므로,
+Projection을 강제 적용하여 실행할 수도 있음
+SET allow_experimental_projection_optimization = 1;
+
 ALTER TABLE TEST MODIFY SETTING index_granularity = 128;
