@@ -8,3 +8,10 @@ ClickHouse는 백그라운드에서 데이터 정렬 및 압축을 수행하지�
 OPTIMIZE TABLE TEST FINAL;
 
 Projections????
+ALTER TABLE TEST ADD PROJECTION proj_default
+(
+    SELECT *, 
+           -toInt64(TMSTART) AS rev_TMSTART,  
+           -toInt64(OCCR_DT) AS rev_OCCR_DT  
+    ORDER BY (rev_TMSTART, rev_OCCR_DT, PKT_SEQ)
+);
