@@ -6,3 +6,5 @@ ALTER TABLE TEST ADD INDEX idx_dip (DIP) TYPE set(1000) GRANULARITY 16;
 
 ClickHouse는 백그라운드에서 데이터 정렬 및 압축을 수행하지만, 수동으로 최적화 가능
 OPTIMIZE TABLE TEST FINAL;
+
+Projections????
