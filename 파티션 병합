@@ -71,3 +71,13 @@ max_partitions_to_read: 병합할 때 한 번에 읽을 수 있는 최대 파티
 
 SYSTEM START MERGES TEST;
 이 명령어를 실행해서 수동으로 병합 프로세스를 시작할 수도 있음.
+백그라운드에서 병합을 활성화하여 자동으로 병합되도록 설정
+
+✅ 4) INSERT 최적화 방법
+🚀 해결책: INSERT 실행 방식을 변경하여 작은 part 생성을 방지
+
+INSERT INTO TEST SELECT * FROM some_source_table SETTINGS insert_distributed_sync = 1;
+✅ insert_distributed_sync = 1을 설정하면 ClickHouse가 병렬 노드에 데이터를 한 번에 보냄
+✅ 작은 파트들이 생성되는 것을 방지하고, 병합이 더 빠르게 일어날 가능성이 높음
+
+
