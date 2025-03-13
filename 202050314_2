@@ -1,0 +1,48 @@
+네, MyBatis를 사용하는 컨트롤러에서 두 개의 서비스를 스레드로 동시에 호출했는데 쿼리가 순차적으로 실행되는 문제에 대해 질문하신 것 같습니다.
+
+이는 MyBatis의 기본 트랜잭션 설정과 데이터베이스 연결 관리 방식 때문에 발생할 수 있는 현상입니다. 다음과 같은 원인과 해결 방법을 고려해 볼 수 있습니다:
+
+1. **트랜잭션 관리 문제**: 
+   - MyBatis는 기본적으로 같은 트랜잭션 내에서는 쿼리를 순차적으로 실행합니다.
+   - 스레드를 생성했더라도 같은 SqlSession을 공유한다면 실제로는 동시에 실행되지 않을 수 있습니다.
+
+2. **커넥션 풀 설정 문제**:
+   - 데이터베이스 커넥션 풀 크기가 제한적이거나 설정이 잘못되어 있을 수 있습니다.
+   - 기본 설정으로는 동시 연결 수가 제한되어 있어 병렬 실행이 불가능할 수 있습니다.
+
+3. **트랜잭션 격리 수준**:
+   - 설정된 트랜잭션 격리 수준이 병렬 실행을 제한할 수 있습니다.
+
+해결 방안:
+
+1. **별도의 SqlSession 사용**:
+   ```java
+   @Service
+   public class SomeService {
+       @Autowired
+       private SqlSessionFactory sqlSessionFactory;
+       
+       public void someMethod() {
+           try (SqlSession session = sqlSessionFactory.openSession()) {
+               // 쿼리 실행
+           }
+       }
+   }
+   ```
+
+2. **트랜잭션 설정 확인**:
+   ```java
+   @Transactional(propagation = Propagation.REQUIRES_NEW)
+   public void serviceMethod() {
+       // 새로운 트랜잭션에서 실행
+   }
+   ```
+
+3. **커넥션 풀 설정 조정**:
+   ```properties
+   # application.properties 또는 application.yml
+   spring.datasource.hikari.maximum-pool-size=20
+   spring.datasource.hikari.minimum-idle=5
+   ```
+
+각 스레드가 독립적인 데이터베이스 연결을 사용하도록 설정하면 병렬 실행이 가능해질 것입니다. 더 자세한 코드 예시나 설정이 필요하시면 알려주세요.​​​​​​​​​​​​​​​​
