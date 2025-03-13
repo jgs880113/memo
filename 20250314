@@ -1,0 +1,176 @@
+스프링부트와 HikariCP를 사용 중이시면, HikariCP 자체는 효율적인 커넥션 풀링을 제공하므로 병렬 쿼리 실행을 지원할 수 있습니다. 문제는 MyBatis 쪽에 있을 가능성이 높습니다.
+
+## HikariCP 및 MyBatis 최적화 방법
+
+### 1. HikariCP 설정 최적화
+```properties
+# application.properties
+spring.datasource.hikari.maximum-pool-size=20
+spring.datasource.hikari.minimum-idle=5
+spring.datasource.hikari.idle-timeout=30000
+spring.datasource.hikari.connection-timeout=30000
+# 중요: 트랜잭션 격리 수준 설정
+spring.datasource.hikari.transaction-isolation=TRANSACTION_READ_COMMITTED
+```
+
+### 2. MyBatis 설정 변경 (스프링부트용)
+```java
+@Configuration
+public class MyBatisConfig {
+    @Bean
+    @ConfigurationProperties(prefix = "mybatis.configuration")
+    public org.apache.ibatis.session.Configuration mybatisConfiguration() {
+        org.apache.ibatis.session.Configuration config = new org.apache.ibatis.session.Configuration();
+        // 중요: 실행자 유형 설정
+        config.setDefaultExecutorType(ExecutorType.REUSE);
+        return config;
+    }
+    
+    @Bean
+    public SqlSessionFactory sqlSessionFactory(DataSource dataSource, 
+            org.apache.ibatis.session.Configuration mybatisConfiguration) throws Exception {
+        SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        factoryBean.setConfiguration(mybatisConfiguration);
+        return factoryBean.getObject();
+    }
+    
+    // 이 부분이 중요: 각 쿼리를 위한 별도의 SqlSessionTemplate 생성
+    @Bean
+    public SqlSessionTemplate sqlSessionTemplate(SqlSessionFactory sqlSessionFactory) {
+        return new SqlSessionTemplate(sqlSessionFactory, ExecutorType.REUSE);
+    }
+}
+```
+
+### 3. 직접 ThreadPool과 SqlSession 관리
+```java
+@Service
+public class ParallelQueryService {
+    @Autowired
+    private SqlSessionFactory sqlSessionFactory;
+    
+    private final ExecutorService executor = Executors.newFixedThreadPool(10);
+    
+    public CompletableFuture<List<ResultA>> executeQueryA() {
+        return CompletableFuture.supplyAsync(() -> {
+            try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.REUSE)) {
+                MyMapper mapper = session.getMapper(MyMapper.class);
+                return mapper.queryA();
+            }
+        }, executor);
+    }
+    
+    public CompletableFuture<List<ResultB>> executeQueryB() {
+        return CompletableFuture.supplyAsync(() -> {
+            try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.REUSE)) {
+                MyMapper mapper = session.getMapper(MyMapper.class);
+                return mapper.queryB();
+            }
+        }, executor);
+    }
+    
+    public void executeQueriesInParallel() {
+        CompletableFuture<List<ResultA>> futureA = executeQueryA();
+        CompletableFuture<List<ResultB>> futureB = executeQueryB();
+        
+        CompletableFuture.allOf(futureA, futureB).join();
+        
+        // 결과 처리
+        List<ResultA> resultA = futureA.join();
+        List<ResultB> resultB = futureB.join();
+    }
+}
+```
+
+### 4. 서비스 호출 시 로깅 추가
+
+실행 시간과 쿼리 시작/종료 시점을 추적하여 병렬 실행 여부 확인:
+
+```java
+@Service
+public class MyService {
+    private static final Logger logger = LoggerFactory.getLogger(MyService.class);
+    
+    @Autowired
+    private SqlSessionFactory sqlSessionFactory;
+    
+    public List<ResultA> queryA() {
+        long startTime = System.currentTimeMillis();
+        logger.info("QueryA 시작: {}, Thread: {}", startTime, Thread.currentThread().getName());
+        
+        try (SqlSession session = sqlSessionFactory.openSession(ExecutorType.REUSE)) {
+            MyMapper mapper = session.getMapper(MyMapper.class);
+            List<ResultA> results = mapper.queryA();
+            
+            long endTime = System.currentTimeMillis();
+            logger.info("QueryA 종료: {}, 소요시간: {}ms, Thread: {}", 
+                endTime, (endTime - startTime), Thread.currentThread().getName());
+            
+            return results;
+        }
+    }
+    
+    // queryB도 유사하게 구현
+}
+```
+
+### 5. 쿼리 수행 시간 측정을 위한 인터셉터 추가
+
+MyBatis의 인터셉터를 추가하여 쿼리 실행 시간을 자세히 측정:
+
+```java
+@Component
+@Intercepts({@Signature(type = Executor.class, method = "query", 
+    args = {MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class})})
+public class QueryPerformanceInterceptor implements Interceptor {
+    private static final Logger logger = LoggerFactory.getLogger(QueryPerformanceInterceptor.class);
+    
+    @Override
+    public Object intercept(Invocation invocation) throws Throwable {
+        MappedStatement ms = (MappedStatement) invocation.getArgs()[0];
+        String sqlId = ms.getId();
+        
+        long startTime = System.currentTimeMillis();
+        logger.info("SQL 시작 - ID: {}, Thread: {}, 시간: {}", 
+            sqlId, Thread.currentThread().getName(), startTime);
+        
+        Object result = invocation.proceed();
+        
+        long endTime = System.currentTimeMillis();
+        logger.info("SQL 종료 - ID: {}, Thread: {}, 시간: {}, 소요시간: {}ms", 
+            sqlId, Thread.currentThread().getName(), endTime, (endTime - startTime));
+        
+        return result;
+    }
+    
+    @Override
+    public Object plugin(Object target) {
+        return Plugin.wrap(target, this);
+    }
+    
+    @Override
+    public void setProperties(Properties properties) {
+    }
+}
+```
+
+이 인터셉터를 등록:
+
+```java
+@Configuration
+public class MyBatisConfig {
+    @Bean
+    public ConfigurationCustomizer mybatisConfigurationCustomizer() {
+        return configuration -> {
+            configuration.addInterceptor(new QueryPerformanceInterceptor());
+        };
+    }
+}
+```
+
+### 6. 특정 데이터베이스 설정 확인
+
+사용 중인 데이터베이스(MySQL, PostgreSQL 등)에 따라 병렬 쿼리 실행을 제한하는 설정이 있는지 확인하세요.
+
+이러한 방법들을 적용하면 MyBatis 쿼리가 병렬로 실행되도록 구성할 수 있을 것입니다. 가장 효과적인 것은 각 쿼리 실행을 위해 별도의 SqlSession을 명시적으로 생성하는 방법입니다.​​​​​​​​​​​​​​​​
