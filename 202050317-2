@@ -1,0 +1,140 @@
+같은 데이터베이스에서 두 개의 독립적인 SqlSessionFactory를 구성하여 동시에 사용하고 싶으신 경우를 설명해 드리겠습니다. 이 방법을 통해 동일한 데이터베이스에서도 병렬 처리가 가능합니다.
+
+다음은 같은 데이터베이스에 연결하는 두 개의 독립적인 SqlSessionFactory를 설정하는 방법입니다:
+
+```java
+@Configuration
+public class MyBatisConfig {
+
+    @Bean(name = "dataSource")
+    @ConfigurationProperties(prefix = "spring.datasource")
+    public DataSource dataSource() {
+        return DataSourceBuilder.create().build();
+    }
+
+    @Bean(name = "sqlSessionFactory1")
+    public SqlSessionFactory sqlSessionFactory1(@Qualifier("dataSource") DataSource dataSource) throws Exception {
+        SqlSessionFactoryBean sqlSessionFactoryBean = new SqlSessionFactoryBean();
+        sqlSessionFactoryBean.setDataSource(dataSource);
+        
+        // SqlSessionFactory 설정
+        org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
+        configuration.setDefaultExecutorType(ExecutorType.SIMPLE); // 또는 다른 Executor 타입
+        configuration.setMapUnderscoreToCamelCase(true);
+        // 추가 설정...
+        
+        sqlSessionFactoryBean.setConfiguration(configuration);
+        sqlSessionFactoryBean.setMapperLocations(
+            new PathMatchingResourcePatternResolver().getResources("classpath:mybatis/mapper/**/*.xml")
+        );
+        
+        return sqlSessionFactoryBean.getObject();
+    }
+
+    @Bean(name = "sqlSessionFactory2")
+    public SqlSessionFactory sqlSessionFactory2(@Qualifier("dataSource") DataSource dataSource) throws Exception {
+        SqlSessionFactoryBean sqlSessionFactoryBean = new SqlSessionFactoryBean();
+        sqlSessionFactoryBean.setDataSource(dataSource);
+        
+        // 두 번째 SqlSessionFactory 설정 - 독립적인 설정
+        org.apache.ibatis.session.Configuration configuration = new org.apache.ibatis.session.Configuration();
+        configuration.setDefaultExecutorType(ExecutorType.SIMPLE);
+        configuration.setMapUnderscoreToCamelCase(true);
+        // 필요시 다른 설정...
+        
+        sqlSessionFactoryBean.setConfiguration(configuration);
+        sqlSessionFactoryBean.setMapperLocations(
+            new PathMatchingResourcePatternResolver().getResources("classpath:mybatis/mapper/**/*.xml")
+        );
+        
+        return sqlSessionFactoryBean.getObject();
+    }
+
+    @Bean(name = "sqlSessionTemplate1")
+    public SqlSessionTemplate sqlSessionTemplate1(@Qualifier("sqlSessionFactory1") SqlSessionFactory sqlSessionFactory) {
+        return new SqlSessionTemplate(sqlSessionFactory);
+    }
+
+    @Bean(name = "sqlSessionTemplate2")
+    public SqlSessionTemplate sqlSessionTemplate2(@Qualifier("sqlSessionFactory2") SqlSessionFactory sqlSessionFactory) {
+        return new SqlSessionTemplate(sqlSessionFactory);
+    }
+}
+```
+
+이제 서비스 단에서 두 개의 SqlSessionTemplate을 주입받아 병렬로 사용할 수 있습니다:
+
+```java
+@Service
+public class MyService {
+
+    @Autowired
+    @Qualifier("sqlSessionTemplate1")
+    private SqlSessionTemplate sqlSessionTemplate1;
+    
+    @Autowired
+    @Qualifier("sqlSessionTemplate2")
+    private SqlSessionTemplate sqlSessionTemplate2;
+    
+    // 또는 SqlSessionFactory를 직접 주입받아 사용할 수도 있습니다
+    @Autowired
+    @Qualifier("sqlSessionFactory1")
+    private SqlSessionFactory sqlSessionFactory1;
+    
+    @Autowired
+    @Qualifier("sqlSessionFactory2")
+    private SqlSessionFactory sqlSessionFactory2;
+    
+    public void executeParallel() {
+        CompletableFuture<Void> future1 = CompletableFuture.runAsync(() -> {
+            try (SqlSession session = sqlSessionFactory1.openSession()) {
+                // 매퍼 직접 가져오기
+                MyMapper mapper = session.getMapper(MyMapper.class);
+                // 쿼리 실행
+                mapper.someQuery();
+                // 또는 직접 실행
+                session.selectList("com.example.mapper.MyMapper.someQuery");
+            }
+        });
+        
+        CompletableFuture<Void> future2 = CompletableFuture.runAsync(() -> {
+            try (SqlSession session = sqlSessionFactory2.openSession()) {
+                MyMapper mapper = session.getMapper(MyMapper.class);
+                mapper.anotherQuery();
+            }
+        });
+        
+        // 두 작업이 모두 완료될 때까지 대기
+        CompletableFuture.allOf(future1, future2).join();
+    }
+    
+    // SqlSessionTemplate 사용 예시
+    public void executeWithTemplates() {
+        CompletableFuture<Void> future1 = CompletableFuture.runAsync(() -> {
+            sqlSessionTemplate1.selectList("com.example.mapper.MyMapper.someQuery");
+        });
+        
+        CompletableFuture<Void> future2 = CompletableFuture.runAsync(() -> {
+            sqlSessionTemplate2.selectList("com.example.mapper.MyMapper.anotherQuery");
+        });
+        
+        CompletableFuture.allOf(future1, future2).join();
+    }
+}
+```
+
+데이터베이스 커넥션 풀 설정도 중요합니다. `application.yml`에서 충분한 크기의 커넥션 풀을 지정하세요:
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/your_db
+    username: root
+    password: password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20  # 충분한 커넥션 수 확보
+      minimum-idle: 5
+```
+
+이 방법을 통해 동일한 데이터베이스를 사용하면서도 서로 다른 SqlSessionFactory를 통해 독립적인 연결로 쿼리를 병렬 실행할 수 있습니다.​​​​​​​​​​​​​​​​
