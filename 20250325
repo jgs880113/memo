@@ -1,0 +1,6 @@
+SELECT *
+FROM system.query_log
+WHERE type = 1  -- 쿼리 실행 완료된 경우 (0은 쿼리가 실패한 경우)
+  AND query like '%FROM TEST%'
+ORDER BY event_time DESC
+LIMIT 10;
