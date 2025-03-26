@@ -15,8 +15,7 @@ wait_time_seconds: event_time과 read_start의 차이를 구한 값으로, 쿼�
 SELECT
     query,
     event_time,
-    read_start,
-    (dateDiff('second', event_time, read_start)) AS wait_time_seconds,
-    query_duration_ms,
-    total_rows
+    query_start_time,
+    (dateDiff('second', event_time, query_start_time)) AS wait_time_seconds,
+    query_duration_ms
 FROM system.query_log
