@@ -6,3 +6,9 @@ max_concurrent_queries
     <artifactId>reactor-core</artifactId>
     <version>3.4.32</version>
 </dependency>
+
+event_time: 쿼리가 시작된 시간입니다.
+
+read_start: 쿼리 실행이 시작되기 전에 실제로 데이터를 읽기 시작한 시간입니다.
+
+wait_time_seconds: event_time과 read_start의 차이를 구한 값으로, 쿼리 대기 시간입니다
