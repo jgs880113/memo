@@ -18,4 +18,10 @@ SELECT
     query_start_time,
     (dateDiff('second', event_time, query_start_time)) AS wait_time_seconds,
     query_duration_ms
-FROM system.query_log
+FROM system.query_log;
+
+event_time( DateTime ) — 쿼리 시작 시간.
+event_time_microseconds( DateTime64 ) — 마이크로초 단위의 정밀도로 시작 시간을 쿼리합니다.
+query_start_time( DateTime ) — 쿼리 실행의 시작 시간.
+query_start_time_microseconds( DateTime64 ) — 마이크로초 단위의 쿼리 실행 시작 시간입니다.
+query_duration_ms( UInt64 ) — 쿼리 실행 기간(밀리초)입니다.
