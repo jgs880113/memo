@@ -38,3 +38,13 @@ SELECT *
 FROM TEST A
 WHERE A.STRTITLE IN exists_codes
    OR A.STRTITLE NOT IN not_exists_codes;
+
+WITH 
+    (SELECT groupArray(CODE) FROM code WHERE FLAG IN ('A', 'B')) AS valid_codes,
+    (SELECT groupArray(CODE) FROM code WHERE NAME IS NULL AND FLAG IN ('A', 'B')) AS invalid_codes
+
+SELECT *
+FROM TEST A
+WHERE A.STRTITLE IN valid_codes
+   OR A.STRTITLE NOT IN invalid_codes;
+
