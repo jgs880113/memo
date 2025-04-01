@@ -122,3 +122,21 @@ OR
     )
 );
 
+
+SELECT A.*
+FROM TEST A
+WHERE 
+(
+    dictHas(default.code_dict, A.STRTITLE) 
+    AND dictGetOrDefault(default.code_dict, 'FLAG', A.STRTITLE, NULL) IN ('A', 'B')
+)
+OR
+(
+    NOT dictHas(default.code_dict, A.STRTITLE)  
+    OR (
+        dictHas(default.code_dict, A.STRTITLE) 
+        AND dictGetOrDefault(default.code_dict, 'NAME', A.STRTITLE, NULL) IS NOT NULL
+        AND dictGetOrDefault(default.code_dict, 'FLAG', A.STRTITLE, NULL) IN ('A', 'B')
+    )
+);
+
