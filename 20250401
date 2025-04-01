@@ -105,3 +105,17 @@ WHERE
     OR (dictHas(default.code_dict, A.STRTITLE) 
         AND dictGetOrDefault(default.code_dict, 'NAME', A.STRTITLE, '') IS NOT NULL);
 
+SELECT A.*
+FROM TEST A
+WHERE 
+(
+    dictHas(default.code_dict, A.STRTITLE) 
+    AND dictGetOrDefault(default.code_dict, 'FLAG', A.STRTITLE, '') IN ('A', 'B')
+)
+OR
+(
+    dictHas(default.code_dict, A.STRTITLE) 
+    AND dictGetOrDefault(default.code_dict, 'FLAG', A.STRTITLE, '') IN ('A', 'B')
+    AND dictGetOrDefault(default.code_dict, 'NAME', A.STRTITLE, '') IS NULL
+);
+
