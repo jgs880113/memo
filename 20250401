@@ -48,3 +48,49 @@ FROM TEST A
 WHERE A.STRTITLE IN valid_codes
    OR A.STRTITLE NOT IN invalid_codes;
 
+
+SELECT A.*
+FROM TEST A
+WHERE A.STRTITLE IN (
+    SELECT CODE FROM code WHERE FLAG IN ('A', 'B')
+)
+OR A.STRTITLE NOT IN (
+    SELECT CODE FROM code WHERE NAME IS NULL AND FLAG IN ('A', 'B')
+);
+
+
+SELECT A.*
+FROM TEST A
+LEFT JOIN (
+    SELECT CODE, 1 AS is_valid
+    FROM code
+    WHERE FLAG IN ('A', 'B')
+) AS valid
+ON A.STRTITLE = valid.CODE
+
+LEFT JOIN (
+    SELECT CODE, 1 AS is_invalid
+    FROM code
+    WHERE NAME IS NULL AND FLAG IN ('A', 'B')
+) AS invalid
+ON A.STRTITLE = invalid.CODE
+
+WHERE valid.is_valid = 1 OR invalid.CODE IS NULL;
+
+
+-- 딕셔너리 테이블 생성 (예시)
+CREATE DICTIONARY code_dict
+(
+  `CODE` String,
+  `FLAG` String,
+  `NAME` Nullable(String)
+)
+PRIMARY KEY CODE
+SOURCE(CLICKHOUSE(HOST 'localhost' PORT 9000 USER 'default' PASSWORD '' DB 'default' TABLE 'code'))
+LIFETIME(MIN 3600 MAX 7200);
+
+-- 딕셔너리 테이블을 사용하는 쿼리
+SELECT A.*
+FROM TEST A
+WHERE dictGet('code_dict', 'FLAG', A.STRTITLE) IN ('A', 'B')
+   OR dictGet('code_dict', 'NAME', A.STRTITLE) IS NULL;
