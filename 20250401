@@ -114,8 +114,11 @@ WHERE
 )
 OR
 (
-    dictHas(default.code_dict, A.STRTITLE) 
-    AND dictGetOrDefault(default.code_dict, 'FLAG', A.STRTITLE, '') IN ('A', 'B')
-    AND dictGetOrDefault(default.code_dict, 'NAME', A.STRTITLE, '') IS NULL
+    NOT dictHas(default.code_dict, A.STRTITLE)  
+    OR (
+        dictHas(default.code_dict, A.STRTITLE) 
+        AND dictGetOrDefault(default.code_dict, 'FLAG', A.STRTITLE, '') IN ('A', 'B')  
+        AND dictGetOrDefault(default.code_dict, 'NAME', A.STRTITLE, '') IS NOT NULL
+    )
 );
 
