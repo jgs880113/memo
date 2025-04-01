@@ -1,0 +1,40 @@
+select *
+  from TEST A
+ WHERE 
+(
+EXISTS (SELECT 1
+                 FROM code aa
+                WHERE A.STRTITLE = AA.CODE AND AA.FLAG IN('A','B'))
+OR
+NOT EXISTS (SELECT 1
+                 FROM code aa
+                WHERE A.STRTITLE = AA.CODE AND AA.NAME IS NULL AND AA.FLAG IN('A','B'))
+)
+
+SELECT * 
+FROM TEST A
+WHERE A.STRTITLE IN (
+    SELECT CODE 
+    FROM code 
+    WHERE FLAG IN ('A', 'B')
+)
+OR A.STRTITLE NOT IN (
+    SELECT CODE 
+    FROM code 
+    WHERE NAME IS NULL AND FLAG IN ('A', 'B')
+);
+➡ EXISTS 및 NOT EXISTS 대체
+
+EXISTS → IN 서브쿼리
+
+NOT EXISTS → NOT IN 서브쿼리
+
+
+WITH 
+    (SELECT groupArray(CODE) FROM code WHERE FLAG IN ('A', 'B')) AS exists_codes,
+    (SELECT groupArray(CODE) FROM code WHERE NAME IS NULL AND FLAG IN ('A', 'B')) AS not_exists_codes
+
+SELECT *
+FROM TEST A
+WHERE A.STRTITLE IN exists_codes
+   OR A.STRTITLE NOT IN not_exists_codes;
