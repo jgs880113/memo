@@ -86,11 +86,20 @@ CREATE DICTIONARY code_dict
   `NAME` Nullable(String)
 )
 PRIMARY KEY CODE
-SOURCE(CLICKHOUSE(HOST 'localhost' PORT 9000 USER 'default' PASSWORD '' DB 'default' TABLE 'code'))
-LIFETIME(MIN 3600 MAX 7200);
+SOURCE(CLICKHOUSE(HOST '192.168.75.128' PORT 8123 USER 'default' PASSWORD '[HIDDEN]' DB 'default' TABLE 'code'))
+LIFETIME(MIN 3600 MAX 7200)
+LAYOUT(FLAT());
+FLAT(): 모든 키와 값을 하나의 연속된 메모리 영역에 저장합니다. 작은 테이블에 적합하며, 메모리 사용량이 적고 조회 성능이 뛰어납니다.
 
 -- 딕셔너리 테이블을 사용하는 쿼리
 SELECT A.*
 FROM TEST A
 WHERE dictGet('code_dict', 'FLAG', A.STRTITLE) IN ('A', 'B')
    OR dictGet('code_dict', 'NAME', A.STRTITLE) IS NULL;
+
+SELECT * 
+FROM TEST A
+WHERE 
+    dictHas(default.code_dict, A.STRTITLE) -- `EXISTS` 대체
+    OR NOT dictHas(default.code_dict, A.STRTITLE) 
+       OR dictGetOrDefault(default.code_dict, 'NAME', A.STRTITLE, '') != '';
