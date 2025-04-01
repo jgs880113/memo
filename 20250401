@@ -100,6 +100,8 @@ WHERE dictGet('code_dict', 'FLAG', A.STRTITLE) IN ('A', 'B')
 SELECT * 
 FROM TEST A
 WHERE 
-    dictHas(default.code_dict, A.STRTITLE) -- `EXISTS` 대체
-    OR NOT dictHas(default.code_dict, A.STRTITLE) 
-       OR dictGetOrDefault(default.code_dict, 'NAME', A.STRTITLE, '') != '';
+    dictHas(default.code_dict, A.STRTITLE)  -- EXISTS 대체
+    OR NOT dictHas(default.code_dict, A.STRTITLE)  -- NOT EXISTS 대체
+    OR (dictHas(default.code_dict, A.STRTITLE) 
+        AND dictGetOrDefault(default.code_dict, 'NAME', A.STRTITLE, '') IS NOT NULL);
+
