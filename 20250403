@@ -48,3 +48,13 @@ FROM TEST A
 WHERE dictGetOrDefault('code_dict', 'FLAG', A.STRTITLE, '') IN ('A', 'B')
    OR (dictGetOrDefault('code_dict', 'NAME', A.STRTITLE, '') IS NOT NULL 
        AND dictGetOrDefault('code_dict', 'FLAG', A.STRTITLE, '') IN ('A', 'B'));
+
+
+
+CREATE MATERIALIZED VIEW mv_test
+ENGINE = MergeTree()
+PARTITION BY substring(OCCR_DT, 1, 8)
+ORDER BY (tuple(TMSTART, -1), tuple(OCCR_DT, -1), tuple(PKT_SEQ, -1))
+SETTINGS index_granularity = 8192
+AS 
+SELECT * FROM TEST;
