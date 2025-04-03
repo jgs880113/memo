@@ -39,4 +39,6 @@ LIFETIME(MIN 60 MAX 60);  -- 1분(60초)마다 갱신
 SELECT *
 FROM TEST A
 WHERE dictGet('code_dict', 'FLAG', A.STRTITLE) IN ('A', 'B')
-OR dictGet('code_dict', 'NAME', A.STRTITLE) IS NOT NULL;
+   OR (dictGet('code_dict', 'NAME', A.STRTITLE) IS NOT NULL 
+       AND dictGet('code_dict', 'FLAG', A.STRTITLE) IN ('A', 'B'));
+
