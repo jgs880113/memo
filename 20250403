@@ -1,0 +1,28 @@
+select *
+  from TEST A
+ WHERE 
+(
+EXISTS (SELECT 1
+                 FROM code aa
+                WHERE A.STRTITLE = AA.CODE AND AA.FLAG IN('A','B'))
+OR
+NOT EXISTS (SELECT 1
+                 FROM code aa
+                WHERE A.STRTITLE = AA.CODE AND AA.NAME IS NULL AND AA.FLAG IN('A','B'))
+)
+
+
+SELECT * 
+FROM TEST A
+WHERE A.STRTITLE GLOBAL IN (
+    SELECT CODE FROM code WHERE FLAG IN ('A', 'B')
+)
+OR A.STRTITLE GLOBAL NOT IN (
+    SELECT CODE FROM code WHERE NAME IS NULL AND FLAG IN ('A', 'B')
+);
+
+
+SELECT *
+FROM TEST A
+WHERE dictGet('code_dict', 'FLAG', A.STRTITLE) IN ('A', 'B')
+OR dictGet('code_dict', 'NAME', A.STRTITLE) IS NOT NULL;
