@@ -42,3 +42,9 @@ WHERE dictGet('code_dict', 'FLAG', A.STRTITLE) IN ('A', 'B')
    OR (dictGet('code_dict', 'NAME', A.STRTITLE) IS NOT NULL 
        AND dictGet('code_dict', 'FLAG', A.STRTITLE) IN ('A', 'B'));
 
+
+SELECT *
+FROM TEST A
+WHERE dictGetOrDefault('code_dict', 'FLAG', A.STRTITLE, '') IN ('A', 'B')
+   OR (dictGetOrDefault('code_dict', 'NAME', A.STRTITLE, '') IS NOT NULL 
+       AND dictGetOrDefault('code_dict', 'FLAG', A.STRTITLE, '') IN ('A', 'B'));
