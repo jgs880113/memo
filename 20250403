@@ -21,6 +21,20 @@ OR A.STRTITLE GLOBAL NOT IN (
     SELECT CODE FROM code WHERE NAME IS NULL AND FLAG IN ('A', 'B')
 );
 
+CREATE DICTIONARY code_dict
+(
+    CODE String,
+    FLAG String,
+    NAME Nullable(String)
+)
+PRIMARY KEY CODE
+SOURCE(CLICKHOUSE(
+    HOST 'localhost' 
+    PORT 9000 
+    USER 'default' 
+    TABLE 'code'
+))
+LIFETIME(MIN 60 MAX 60);  -- 1분(60초)마다 갱신
 
 SELECT *
 FROM TEST A
