@@ -51,10 +51,12 @@ WHERE dictGetOrDefault('code_dict', 'FLAG', A.STRTITLE, '') IN ('A', 'B')
 
 
 
+INSERT INTO mv_test SELECT *, reverse(TMSTART) AS rev_TMSTART, reverse(OCCR_DT) AS rev_OCCR_DT, reverse(PKT_SEQ) AS rev_PKT_SEQ FROM TEST;
+
 CREATE MATERIALIZED VIEW mv_test
 ENGINE = MergeTree()
 PARTITION BY substring(OCCR_DT, 1, 8)
-ORDER BY (tuple(TMSTART, -1), tuple(OCCR_DT, -1), tuple(PKT_SEQ, -1))
+ORDER BY (reverse(TMSTART), reverse(OCCR_DT), reverse(PKT_SEQ))
 SETTINGS index_granularity = 8192
 AS 
-SELECT * FROM TEST;
+SELECT *, reverse(TMSTART) AS rev_TMSTART, reverse(OCCR_DT) AS rev_OCCR_DT, reverse(PKT_SEQ) AS rev_PKT_SEQ FROM TEST;
