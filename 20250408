@@ -18,37 +18,32 @@ SELECT *
    AND STRTITLE = 'apple'
    AND dictGetOrDefault('exip_dict_ip_sig', 'flag', (SIP, STRTITLE), 0) NOT IN (1, 2)
    AND dictGetOrDefault('exip_dict_ip_sig', 'flag', (DIP, STRTITLE), 0) NOT IN (1, 3)
-   AND dictGetOrDefault('exip_dict_ip_only', 'flag', SIP, 0) NOT IN (1, 2)
-   AND dictGetOrDefault('exip_dict_ip_only', 'flag', DIP, 0) NOT IN (1, 3)
+   AND NOT has(dictGet('exip_dict_ip_flag12_set', 'ip_set', SIP), SIP)
+   AND NOT has(dictGet('exip_dict_ip_flag13_set', 'ip_set', DIP), DIP)
 ;
 
-
-
-CREATE DICTIONARY exip_dict_ip_only
+CREATE DICTIONARY exip_dict_ip_flag12_set
 (
     IP String,
-    flag UInt8
+    ip_set Array(String)
 )
 PRIMARY KEY IP
 SOURCE(CLICKHOUSE(
-    QUERY 'SELECT IP, FLAG as flag FROM EXIP WHERE FLAG IN (1, 2, 3)'
+    QUERY 'SELECT IP, groupArray(IP) AS ip_set FROM EXIP WHERE FLAG IN (1, 2) GROUP BY IP'
 ))
 LAYOUT(FLAT())
 LIFETIME(MIN 30 MAX 60);
 
-
-CREATE DICTIONARY exip_dict_ip_sig
+CREATE DICTIONARY exip_dict_ip_flag13_set
 (
     IP String,
-    SIG_NM String,
-    flag UInt8
+    ip_set Array(String)
 )
-PRIMARY KEY IP, SIG_NM
+PRIMARY KEY IP
 SOURCE(CLICKHOUSE(
-    QUERY 'SELECT IP, SIG_NM, FLAG AS flag FROM EXIP WHERE FLAG IN (1, 2, 3)'
+    QUERY 'SELECT IP, groupArray(IP) AS ip_set FROM EXIP WHERE FLAG IN (1, 3) GROUP BY IP'
 ))
 LAYOUT(FLAT())
 LIFETIME(MIN 30 MAX 60);
-
 
 
