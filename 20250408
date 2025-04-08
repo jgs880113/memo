@@ -48,3 +48,110 @@ LIFETIME(MIN 30 MAX 60);
 
 
 ALTER TABLE default.TEST MODIFY TTL toTimeZone(parseDateTimeBestEffort(OCCR_DT), 'Asia/Seoul') + INTERVAL 3 MONTH DELETE;
+
+
+🅰️ [Case 1] IP당 FLAG가 1개 (단일)
+📋 EXIP 예시:
+IP	SIG_NM	FLAG
+1.1.1.1	apple	'1'
+1.1.1.2	apple	'2'
+1.1.1.3	apple	'3'
+✅ 필요한 Dictionary 2개
+① exip_dict_ip_sig (복합 키)
+sql
+복사
+편집
+CREATE DICTIONARY exip_dict_ip_sig
+(
+    IP String,
+    SIG_NM String,
+    flag String
+)
+PRIMARY KEY (IP, SIG_NM)
+SOURCE(CLICKHOUSE(
+    QUERY 'SELECT IP, SIG_NM, FLAG AS flag FROM EXIP'
+))
+LAYOUT(HASHED())
+LIFETIME(MIN 30 MAX 60);
+② exip_dict_ip_only (IP 단일 키)
+sql
+복사
+편집
+CREATE DICTIONARY exip_dict_ip_only
+(
+    IP String,
+    flag String
+)
+PRIMARY KEY IP
+SOURCE(CLICKHOUSE(
+    QUERY 'SELECT IP, FLAG AS flag FROM EXIP'
+))
+LAYOUT(HASHED())
+LIFETIME(MIN 30 MAX 60);
+✅ 쿼리
+sql
+복사
+편집
+SELECT *
+FROM TEST
+WHERE OCCR_DT BETWEEN '202501010920' AND '202504010920'
+  AND STRTITLE = 'apple'
+  AND dictGetOrDefault('exip_dict_ip_sig', 'flag', (SIP, STRTITLE), '0') NOT IN ('1', '2')
+  AND dictGetOrDefault('exip_dict_ip_sig', 'flag', (DIP, STRTITLE), '0') NOT IN ('1', '3')
+  AND dictGetOrDefault('exip_dict_ip_only', 'flag', SIP, '0') NOT IN ('1', '2')
+  AND dictGetOrDefault('exip_dict_ip_only', 'flag', DIP, '0') NOT IN ('1', '3')
+🅱️ [Case 2] IP당 여러 FLAG (중복 있음)
+📋 EXIP 예시:
+IP	SIG_NM	FLAG
+1.1.1.1	apple	'1'
+1.1.1.1	apple	'2'
+1.1.1.2	banana	'3'
+✅ Dictionary 2개 (둘 다 groupArray 사용)
+① exip_dict_ip_sig (복합 키 → FLAG 목록)
+sql
+복사
+편집
+CREATE DICTIONARY exip_dict_ip_sig
+(
+    IP String,
+    SIG_NM String,
+    flags Array(String)
+)
+PRIMARY KEY (IP, SIG_NM)
+SOURCE(CLICKHOUSE(
+    QUERY 'SELECT IP, SIG_NM, groupArray(FLAG) AS flags FROM EXIP GROUP BY IP, SIG_NM'
+))
+LAYOUT(FLAT())
+LIFETIME(MIN 30 MAX 60);
+② exip_dict_ip_only (IP 단일 키 → FLAG 목록)
+sql
+복사
+편집
+CREATE DICTIONARY exip_dict_ip_only
+(
+    IP String,
+    flags Array(String)
+)
+PRIMARY KEY IP
+SOURCE(CLICKHOUSE(
+    QUERY 'SELECT IP, groupArray(FLAG) AS flags FROM EXIP GROUP BY IP'
+))
+LAYOUT(FLAT())
+LIFETIME(MIN 30 MAX 60);
+✅ 쿼리
+sql
+복사
+편집
+SELECT *
+FROM TEST
+WHERE OCCR_DT BETWEEN '202501010920' AND '202504010920'
+  AND STRTITLE = 'apple'
+  AND NOT hasAny(dictGet('exip_dict_ip_sig', 'flags', (SIP, STRTITLE)), ['1', '2'])
+  AND NOT hasAny(dictGet('exip_dict_ip_sig', 'flags', (DIP, STRTITLE)), ['1', '3'])
+  AND NOT hasAny(dictGet('exip_dict_ip_only', 'flags', SIP), ['1', '2'])
+  AND NOT hasAny(dictGet('exip_dict_ip_only', 'flags', DIP), ['1', '3'])
+✅ 최종 비교 요약
+케이스	딕셔너리 구조	함수	예시
+IP당 FLAG 1개	flag String	dictGetOrDefault(...) NOT IN (...)	빠르고 단순
+IP당 여러 FLAG	flags Array(String)	NOT hasAny(...)	복잡하지만 정확
+
