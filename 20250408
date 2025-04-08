@@ -12,20 +12,30 @@ select *
 
 
 SELECT *
-  FROM TEST A
-  LEFT JOIN EXIP B1
-    ON A.SIP = B1.IP AND A.STRTITLE = B1.SIG_NM AND (B1.FLAG = '1' OR B1.FLAG = '2')
-  LEFT JOIN EXIP B2
-    ON A.DIP = B2.IP AND A.STRTITLE = B2.SIG_NM AND (B2.FLAG = '1' OR B2.FLAG = '3')
-  LEFT JOIN EXIP B3
-    ON A.SIP = B3.IP AND (B3.FLAG = '1' OR B3.FLAG = '2')
-  LEFT JOIN EXIP B4
-    ON A.DIP = B4.IP AND (B4.FLAG = '1' OR B4.FLAG = '3')
- WHERE A.OCCR_DT >= '202501010920'
-   AND A.OCCR_DT <= '202504010920'
-   AND A.STRTITLE = 'apple'
-   AND B1.IP IS NULL
-   AND B2.IP IS NULL
-   AND B3.IP IS NULL
-   AND B4.IP IS NULL
+  FROM TEST
+ WHERE OCCR_DT >= '202501010920'
+   AND OCCR_DT <= '202504010920'
+   AND STRTITLE = 'apple'
+   AND dictGetOrDefault('exip_dict', 'flag', (SIP, STRTITLE), 0) NOT IN (1, 2)
+   AND dictGetOrDefault('exip_dict', 'flag', (DIP, STRTITLE), 0) NOT IN (1, 3)
+   AND dictGetOrDefault('exip_dict', 'flag', (SIP, ''), 0) NOT IN (1, 2)
+   AND dictGetOrDefault('exip_dict', 'flag', (DIP, ''), 0) NOT IN (1, 3)
 ;
+
+CREATE DICTIONARY exip_dict
+(
+    IP String,
+    SIG_NM String,
+    flag UInt8
+)
+PRIMARY KEY IP, SIG_NM
+SOURCE(CLICKHOUSE(
+    HOST 'localhost'
+    PORT 9000
+    USER 'default'
+    TABLE 'EXIP'
+    DB 'your_db'
+))
+LAYOUT(FLAT())
+LIFETIME(MIN 30 MAX 60);
+
