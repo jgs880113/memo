@@ -20,7 +20,7 @@ SELECT *
    AND dictGetOrDefault('exip_dict', 'flag', (DIP, STRTITLE), 0) NOT IN (1, 3)
    AND dictGetOrDefault('exip_dict', 'flag', (SIP, ''), 0) NOT IN (1, 2)
    AND dictGetOrDefault('exip_dict', 'flag', (DIP, ''), 0) NOT IN (1, 3)
-;
+
 
 CREATE DICTIONARY exip_dict
 (
