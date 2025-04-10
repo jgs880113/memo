@@ -8,3 +8,29 @@ select *
      AND SIP NOT IN (SELECT IP FROM EXIP WHERE SIG_NM IS NULL AND (FLAG = '1' OR FLAG = '2'))
      AND DIP NOT IN (SELECT IP FROM EXIP WHERE SIG_NM IS NULL AND (FLAG = '1' OR FLAG = '3'))
 ;
+
+
+CREATE DICTIONARY exip_dict_ip_sig
+(
+    IP String,
+    SIG_NM String,
+    flags Array(String)
+)
+PRIMARY KEY (IP, SIG_NM)
+SOURCE(CLICKHOUSE(
+    QUERY 'SELECT IP, SIG_NM, groupArray(FLAG) AS flags FROM EXIP WHERE SIG_NM IS NOT NULL GROUP BY IP, SIG_NM'
+))
+LAYOUT(FLAT())
+LIFETIME(MIN 30 MAX 60);
+② exip_dict_ip_only (IP 단일 키 → FLAG 목록)
+CREATE DICTIONARY exip_dict_ip_only
+(
+    IP String,
+    flags Array(String)
+)
+PRIMARY KEY IP
+SOURCE(CLICKHOUSE(
+    QUERY 'SELECT IP, groupArray(FLAG) AS flags FROM EXIP WHERE SIG_NM IS NULL GROUP BY IP'
+))
+LAYOUT(FLAT())
+LIFETIME(MIN 30 MAX 60);
