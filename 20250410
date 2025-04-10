@@ -34,3 +34,13 @@ SOURCE(CLICKHOUSE(
 ))
 LAYOUT(FLAT())
 LIFETIME(MIN 30 MAX 60);
+
+
+SELECT *
+FROM TEST
+WHERE OCCR_DT BETWEEN '202501010920' AND '202504010920'
+  AND STRTITLE = 'apple'
+  AND NOT hasAny(dictGet('exip_dict_ip_sig', 'flags', (SIP, STRTITLE)), ['1', '2'])
+  AND NOT hasAny(dictGet('exip_dict_ip_sig', 'flags', (DIP, STRTITLE)), ['1', '3'])
+  AND NOT hasAny(dictGet('exip_dict_ip_only', 'flags', SIP), ['1', '2'])
+  AND NOT hasAny(dictGet('exip_dict_ip_only', 'flags', DIP), ['1', '3']);
