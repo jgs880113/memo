@@ -1,0 +1,8 @@
+SELECT
+  ip_num,
+  IF(
+    isNotNull(ip_num) AND ip_num BETWEEN 0 AND 4294967295,
+    IPv4NumToString(ip_num),
+    'invalid'
+  ) AS ip_string
+FROM ip_test;
