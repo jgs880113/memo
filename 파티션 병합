@@ -81,3 +81,11 @@ INSERT INTO TEST SELECT * FROM some_source_table SETTINGS insert_distributed_syn
 ✅ 작은 파트들이 생성되는 것을 방지하고, 병합이 더 빠르게 일어날 가능성이 높음
 
 
+
+merge_max_size = 1024000000
+merge_max_bytes_to_use_cache = 1000000000
+
+background_pool_size = 16
+background_merges_mutations_concurrency_ratio = 1.0
+
+SET max_execution_time = 1800; -- 30분
