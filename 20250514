@@ -1,0 +1,35 @@
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+
+public class DateComparisonExample {
+    public static void main(String[] args) {
+        // 비교할 날짜 문자열
+        String dateString = "20250214"; // 예시 날짜 (yyyyMMdd 형식)
+        
+        // 날짜 형식 지정
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+        
+        try {
+            // 문자열을 LocalDate로 변환
+            LocalDate dateToCheck = LocalDate.parse(dateString, formatter);
+            
+            // 현재 날짜 가져오기
+            LocalDate currentDate = LocalDate.now();
+            
+            // 현재 날짜에서 3개월 전 날짜 계산
+            LocalDate threeMonthsAgo = currentDate.minusMonths(3);
+            
+            // 날짜가 3개월보다 오래됐는지 확인
+            boolean isOlderThanThreeMonths = dateToCheck.isBefore(threeMonthsAgo);
+            
+            // 결과 출력
+            if (isOlderThanThreeMonths) {
+                System.out.println("해당 날짜는 현재로부터 3개월이 넘었습니다.");
+            } else {
+                System.out.println("해당 날짜는 현재로부터 3개월이 넘지 않았습니다.");
+            }
+            
+        } catch (Exception e) {
+            System.out.println("날짜 형식이 올바르지 않습니다. 'yyyyMMdd' 형식을 사용하세요.");
+        }
+}
