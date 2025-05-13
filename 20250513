@@ -1,4 +1,4 @@
-SIP_INCI_CD IN
+WHERE SIP_INCI_CD IN
 (SELECT INST_CD
    FROM TSMIST
   WHERE (
@@ -8,3 +8,9 @@ SIP_INCI_CD IN
   </foreach>
 )
 )
+
+WHERE 
+  <foreach collection="list" item="item" separator="OR" open="(" close=")">
+   <if test="type" == 'on'.toString()"> dictGetString('tsminst_dict', 'inst_nm', SIP_INCI_CD) ILIKE '%' || UPPER(#{item}) || '%' </if>
+   <if test="type" == 'off'.toString()"> dictGetString('tsminst_dict', 'inst_nm', SIP_INCI_CD) = #{item}</if>
+  </foreach>
