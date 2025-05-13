@@ -1,0 +1,8 @@
+SIP_INCI_CD IN
+(SELECT INST_CD
+   FROM TSMIST
+  WHERE (
+  <foreach collection="list" item="item" separator="OR" open="c" close=")">
+   <if test="type" == 'on'.toString()"> UPPER(INST_NM) LIKE '%' || UPPER(#{item}) || '%'</if>
+   <if test="type" == 'off'.toString()"> UPPER(INST_NM) = UPPER(#{item})</if>
+  </foreach>
