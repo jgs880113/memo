@@ -14,3 +14,6 @@ WHERE
    <if test="type" == 'on'.toString()"> dictGetString('tsminst_dict', 'inst_nm', SIP_INCI_CD) ILIKE '%' || UPPER(#{item}) || '%' </if>
    <if test="type" == 'off'.toString()"> dictGetString('tsminst_dict', 'inst_nm', SIP_INCI_CD) = #{item}</if>
   </foreach>
+
+
+ORDER BY (OCCR_DT, TMSTART, PKT_SEQ)
