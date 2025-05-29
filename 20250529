@@ -1,0 +1,12 @@
+| 설정명                                             | 추천값          | 이유                                 |
+| ----------------------------------------------- | ------------ | ---------------------------------- |
+| `optimize_read_in_order`                        | `1`          | **정렬된 순서 그대로 읽기** → 정렬 비용 제거       |
+| `allow_lazy_column_extraction`                  | `1`          | `SDATA` 지연 읽기 가능                   |
+| `query_plan_max_limit_for_lazy_materialization` | `100~300`    | Lazy Materialization Plan 크기 허용 증가 |
+| `max_threads`                                   | 서버 코어 수      | 병렬 처리 성능 최대화                       |
+| `max_memory_usage`                              | 2G 이상        | 충분한 메모리 확보로 spill 방지               |
+| `max_bytes_before_external_sort`                | 1G 이상        | 외부 정렬 방지                           |
+| `max_rows_to_read`                              | 100000000 이상 | scan 제한 완화로 빠른 데이터 확보              |
+| `min_bytes_to_use_direct_io`                    | 1M 이상        | SSD + 대용량일 경우 Direct IO 활용         |
+| `read_backoff_min_latency_ms`                   | `10`         | 느린 I/O에 대한 backoff 회피              |
+| `read_backoff_min_rows`                         | `100000`     | 대량 스캔 상황에서 비효율 방지                  |
