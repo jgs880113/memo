@@ -10,3 +10,55 @@
 | `min_bytes_to_use_direct_io`                    | 1M 이상        | SSD + 대용량일 경우 Direct IO 활용         |
 | `read_backoff_min_latency_ms`                   | `10`         | 느린 I/O에 대한 backoff 회피              |
 | `read_backoff_min_rows`                         | `100000`     | 대량 스캔 상황에서 비효율 방지                  |
+
+
+
+<profiles>
+    <high_perf_profile>
+        <!-- 병렬 처리 성능 -->
+        <max_threads>16</max_threads>
+
+        <!-- 메모리 사용량 제한 -->
+        <max_memory_usage>16000000000</max_memory_usage> <!-- 16 GB -->
+        <max_memory_usage_for_all_queries>32000000000</max_memory_usage_for_all_queries> <!-- 32 GB -->
+
+        <!-- 정렬 시 Spill 방지 -->
+        <max_bytes_before_external_sort>2000000000</max_bytes_before_external_sort>
+        <max_bytes_before_remerge_sort>1000000000</max_bytes_before_remerge_sort>
+
+        <!-- Lazy Materialization 관련 -->
+        <allow_lazy_column_extraction>1</allow_lazy_column_extraction>
+        <query_plan_max_limit_for_lazy_materialization>300</query_plan_max_limit_for_lazy_materialization>
+
+        <!-- 정렬 최적화 -->
+        <optimize_read_in_order>1</optimize_read_in_order>
+
+        <!-- 읽기 최적화 -->
+        <max_rows_to_read>200000000</max_rows_to_read>
+        <min_bytes_to_use_direct_io>1048576</min_bytes_to_use_direct_io>
+        <read_backoff_min_latency_ms>10</read_backoff_min_latency_ms>
+        <read_backoff_min_rows>100000</read_backoff_min_rows>
+
+        <!-- 쿼리 실행 시간 제한 (선택) -->
+        <max_execution_time>60</max_execution_time>
+
+        <!-- ✅ 캐싱 관련 설정 추가 -->
+        <!-- 쿼리 결과 재사용을 위한 쿼리 캐시 활성화 -->
+        <use_query_cache>1</use_query_cache>
+
+        <!-- 쿼리 캐시 유효 기간 (초 단위, 기본은 무제한) -->
+        <query_cache_ttl>300</query_cache_ttl> <!-- 5분 동안 동일 쿼리 캐시 사용 -->
+
+        <!-- 쿼리 캐시 크기 제한 (바이트 단위) -->
+        <query_cache_max_size_in_bytes>1073741824</query_cache_max_size_in_bytes> <!-- 1 GB -->
+
+        <!-- 디스크 캐시 설정 (merge tree 데이터 디스크 읽기 캐시) -->
+        <enable_filesystem_cache>1</enable_filesystem_cache>
+
+        <!-- 디스크 캐시 크기 제한 (단위: 바이트) -->
+        <filesystem_cache_max_size>10737418240</filesystem_cache_max_size> <!-- 10 GB -->
+
+        <!-- 디스크 캐시에서 쿼리당 사용할 수 있는 최대 바이트 수 -->
+        <filesystem_cache_max_elements>100000</filesystem_cache_max_elements>
+    </high_perf_profile>
+</profiles>
