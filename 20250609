@@ -19,3 +19,6 @@ WITH
 SELECT *, arrayJoin([total]) AS RN
 FROM main_data
 ORDER BY TMSTART, OCCR_DT, PKT_SEQ;
+
+
+SDATA있냐 없냐에 따라 분기?
