@@ -1,0 +1,21 @@
+WITH
+    -- 총 건수를 서브쿼리에서 먼저 계산
+    (SELECT count(*) 
+     FROM TEST 
+     WHERE OCCR_DT BETWEEN '202503010000' AND '202503312359'
+       AND STRTITLE = 'abc') AS total,
+
+    -- LIMIT 쿼리 (필요한 데이터만)
+    main_data AS (
+        SELECT OCCR_DT, STRTITLE, PKT_SEQ, SIP, DIP, TMSTART, SDATA
+        FROM TEST
+        WHERE OCCR_DT BETWEEN '202503010000' AND '202503312359'
+          AND STRTITLE = 'abc'
+        ORDER BY TMSTART, OCCR_DT, PKT_SEQ
+        LIMIT 100 OFFSET 0
+    )
+
+-- arrayJoin을 통해 total 값을 결과 row에 모두 붙이기
+SELECT *, arrayJoin([total]) AS RN
+FROM main_data
+ORDER BY TMSTART, OCCR_DT, PKT_SEQ;
