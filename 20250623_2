@@ -1,0 +1,61 @@
+1단계: U만 필터링
+
+# 1. U인 것만 추출
+update_df = df.filter(col("op_code") == "U")
+
+# 2. U 아닌 것만 추출
+df = df.filter(col("op_code") != "U")
+
+
+2단계: update_df를 foreachPartition으로 분산 처리
+update_df.foreachPartition(lambda partition: handle_update_partition(partition))
+
+3단계: handle_update_partition 함수 정의
+def handle_update_partition(rows):
+    from clickhouse_driver import Client
+    client = Client(host="your_host", port=9000, database="your_db", user="default", password="your_pw")
+
+    for row in rows:
+        row_dict = row.asDict()
+        handle_update(row_dict, client)
+
+4단계: before/after 비교하여 변경된 컬럼만 UPDATE
+def handle_update(row, client):
+    before = row.get("before")
+    after = row.get("after")
+
+    if not before or not after:
+        print("[WARN] UPDATE 이벤트에 before 또는 after 누락")
+        return
+
+    # SET 절 구성 (변경된 컬럼만)
+    set_clauses = []
+    params = {}
+    for key, new_value in after.items():
+        old_value = before.get(key)
+        if old_value != new_value:
+            set_clauses.append(f"{key} = %({key})s")
+            params[key] = new_value
+
+    if not set_clauses:
+        print("[INFO] 변경된 컬럼 없음 - UPDATE 생략")
+        return
+
+    # 복합키를 기준으로 WHERE 절 구성
+    where_clauses = []
+    for key in before:
+        # 모든 before 키를 WHERE 절에 포함 (복합키용)
+        where_clauses.append(f"{key} = %({key}_pk)s")
+        params[f"{key}_pk"] = before[key]
+
+    # 최종 SQL 생성
+    sql = f"""
+    ALTER TABLE your_table
+    UPDATE {', '.join(set_clauses)}
+    WHERE {' AND '.join(where_clauses)};
+    """
+
+    try:
+        client.execute(sql, params)
+    except Exception as e:
+        print(f"[ERROR] UPDATE 실패: {e}")   
