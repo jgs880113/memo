@@ -1,0 +1,87 @@
+ 예: JSON 구조 예시
+json
+복사
+편집
+{
+  "your_table": ["id", "region"],
+  "another_table": ["user_id"]
+}
+이 JSON 파일을 table_keys.json이라고 가정할게요.
+
+✅ 1단계: JSON 로딩
+python
+복사
+편집
+import json
+
+with open("table_keys.json", "r") as f:
+    table_pk_map = json.load(f)
+이제 table_pk_map은 다음처럼 사용 가능:
+
+python
+복사
+편집
+table_pk_map["your_table"]  # ['id', 'region']
+✅ 2단계: handle_update()에 테이블명과 매핑된 키 전달
+python
+복사
+편집
+def handle_update(row, client, table_name, pk_columns):
+    before = row.get("before")
+    after = row.get("after")
+
+    if not before or not after:
+        print(f"[WARN] {table_name}: before 또는 after 누락")
+        return
+
+    # SET 절 구성
+    set_clauses = []
+    params = {}
+    for key, new_value in after.items():
+        old_value = before.get(key)
+        if old_value != new_value:
+            set_clauses.append(f"{key} = %({key})s")
+            params[key] = new_value
+
+    if not set_clauses:
+        print(f"[INFO] {table_name}: 변경 없음 - UPDATE 생략")
+        return
+
+    # WHERE 절 구성 (지정된 PK만)
+    where_clauses = []
+    for key in pk_columns:
+        if key not in before:
+            print(f"[ERROR] {table_name}: PK 컬럼 '{key}'가 before에 없음")
+            return
+        where_clauses.append(f"{key} = %({key}_pk)s")
+        params[f"{key}_pk"] = before[key]
+
+    sql = f"""
+    ALTER TABLE {table_name}
+    UPDATE {', '.join(set_clauses)}
+    WHERE {' AND '.join(where_clauses)};
+    """
+
+    try:
+        client.execute(sql, params)
+    except Exception as e:
+        print(f"[ERROR] {table_name} UPDATE 실패: {e}")
+✅ 3단계: 호출 예시 (table_name 포함)
+python
+복사
+편집
+def handle_update_partition(rows, client, table_name, pk_columns):
+    for row in rows:
+        row_dict = row.asDict()
+        handle_update(row_dict, client, table_name, pk_columns)
+foreachPartition에서는 이렇게 사용:
+
+python
+복사
+편집
+from clickhouse_driver import Client
+client = Client(...)
+
+pk_columns = table_pk_map["your_table"]
+
+update_df.foreachPartition(lambda part: handle_update_partition(part, client, "your_table", pk_columns))
