@@ -1,0 +1,83 @@
+✅ Kafka 메시지 예시 구조 (Debezium 스타일)
+json
+복사
+편집
+{
+  "op": "u",
+  "before": {
+    "id": 101
+  },
+  "after": {
+    "id": 101,
+    "name": "new_name",
+    "email": "new@email.com"
+  },
+  "ts_ms": 1719200000000
+}
+✅ 처리 흐름 정리
+op == 'u'이면 handle_update(row) 함수 호출
+
+before에서 PK 컬럼 추출 → WHERE id = 101
+
+after에서 변경된 컬럼만 추출 → SET name = ..., email = ...
+
+ClickHouse에 ALTER TABLE ... UPDATE 전송
+
+✅ PySpark foreachBatch 예시
+python
+복사
+편집
+def handle_update(row, client):
+    before = row['before']
+    after = row['after']
+
+    if not before or not after:
+        print("[WARN] UPDATE 이벤트에 before 또는 after 누락")
+        return
+
+    # SET 절 구성
+    set_clauses = []
+    params = {}
+    for key, value in after.items():
+        if key not in before or before[key] != value:
+            set_clauses.append(f"{key} = %({key})s")
+            params[key] = value
+
+    # WHERE 절 (PK 기준)
+    where_clauses = []
+    for key, value in before.items():
+        where_clauses.append(f"{key} = %({key}_pk)s")
+        params[f"{key}_pk"] = value
+
+    if not set_clauses:
+        print("[INFO] 변경된 필드 없음, UPDATE 생략")
+        return
+
+    sql = f"""
+    ALTER TABLE your_table
+    UPDATE {', '.join(set_clauses)}
+    WHERE {' AND '.join(where_clauses)};
+    """
+    client.execute(sql, params)
+✅ 전체 구조 예시
+python
+복사
+편집
+def update_clickhouse(batch_df, batch_id):
+    from clickhouse_driver import Client
+    client = Client(
+        host='your_host',
+        port=9000,
+        user='default',
+        password='your_password',
+        database='your_db'
+    )
+
+    for row in batch_df.collect():
+        handle_update(row.asDict(), client)
+🔒 보안 및 안정성 고려
+항목	처리 방법
+SQL Injection	%(key)s 방식으로 파라미터 바인딩 사용 ✔
+예외 처리	try/except로 각 row 처리 시 에러 로깅 ✔
+변경 없는 경우 생략	before == after면 UPDATE 생략 처리 ✔
+pk 미존재 에러	before가 비면 WARNING 로그만 출력 ✔
