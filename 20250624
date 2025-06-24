@@ -1,0 +1,101 @@
+전체 흐름 코드
+import json
+
+def handle_update_partition(rows, client, pk_map):
+    for row in rows:
+        row_dict = row.asDict()
+        handle_update(row_dict, client, pk_map)
+
+def handle_update(row, client, pk_map):
+    table = row.get("table")
+    before_str = row.get("before")
+    after = row.get("after")
+
+    if not table or not before_str or not after:
+        print(f"[WARN] 필드 누락 - table: {table}, before: {before_str}, after: {after}")
+        return
+
+    # 1. before 파싱
+    try:
+        before = json.loads(before_str)
+    except Exception as e:
+        print(f"[ERROR] before JSON 파싱 실패: {e}")
+        return
+
+    # 2. SET 절 구성 (after에 있는 항목들만)
+    set_clauses = []
+    params = {}
+    for col, val in after.items():
+        set_clauses.append(f"{col} = %({col})s")
+        params[col] = val
+
+    if not set_clauses:
+        print(f"[INFO] 변경된 항목 없음 - {table}")
+        return
+
+    # 3. WHERE 절 구성 (pk_map 기준)
+    pk_cols = pk_map.get(table)
+    if not pk_cols:
+        print(f"[ERROR] 테이블 {table}에 대한 PK 정보 없음")
+        return
+
+    where_clauses = []
+    for pk in pk_cols:
+        if pk not in before:
+            print(f"[ERROR] PK '{pk}' 누락 in before for table {table}")
+            return
+        where_clauses.append(f"{pk} = %({pk}_pk)s")
+        params[f"{pk}_pk"] = before[pk]
+
+    # 4. SQL 생성 및 실행
+    sql = f"""
+    ALTER TABLE {table}
+    UPDATE {', '.join(set_clauses)}
+    WHERE {' AND '.join(where_clauses)};
+    """
+
+    try:
+        client.execute(sql, params)
+    except Exception as e:
+        print(f"[ERROR] UPDATE 실패: {e} - SQL: {sql} - PARAMS: {params}")
+
+
+
+
+
+Spark 적용 예시 (foreachPartition)
+from clickhouse_driver import Client
+
+client = Client(host='clickhouse_host', port=9000, database='your_db', user='default', password='your_pw')
+
+# 테이블별 PK 정의
+pk_map = {
+    "your_table": ["id", "region"]
+}
+
+# update_df: op_code == 'U'인 레코드만 담긴 DataFrame
+update_df.foreachPartition(lambda part: handle_update_partition(part, client, pk_map))   
+
+
+
+
+
+예시 데이터 구조 (한 row)
+{
+  "table": "your_table",
+  "op_code": "U",
+  "before": '{"id": 101, "region": "KR", "name": "Alice", "age": 30}',
+  "after": {"name": "Bob"}
+}
+
+→ 실행되는 SQL:
+ALTER TABLE your_table
+UPDATE name = %(name)s
+WHERE id = %(id_pk)s AND region = %(region_pk)s;
+
+→ 파라미터:
+{
+  "name": "Bob",
+  "id_pk": 101,
+  "region_pk": "KR"
+}
