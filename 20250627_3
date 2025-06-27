@@ -1,0 +1,16 @@
+WITH
+(
+	SELECT sum(sign(PKT_SEQ)) -- PKT_SEQ는 null이 아니고 0이 아닐 것이므로, 모든 행에 대해 1을 반환
+	FROM (
+		SELECT PKT_SEQ FROM TEST
+		WHERE OCCR_DT BETWEEN '2025-03-01 00:00:00' AND '2025-03-31 23:59:59'
+		  AND STRTITLE = 'abc'
+
+		UNION ALL
+
+		SELECT PKT_SEQ FROM TEST2
+		WHERE OCCR_DT BETWEEN '2025-03-01 00:00:00' AND '2025-03-31 23:59:59'
+		  AND STRTITLE = 'abc'
+	)
+) AS RN
+-- ... (나머지 쿼리는 동일)
