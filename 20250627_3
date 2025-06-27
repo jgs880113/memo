@@ -14,3 +14,11 @@ WITH
 	)
 ) AS RN
 -- ... (나머지 쿼리는 동일)
+
+
+SELECT sum(PKT_SEQ != '') AS RN
+FROM (
+    SELECT PKT_SEQ FROM TEST WHERE ...
+    UNION ALL
+    SELECT PKT_SEQ FROM TEST2 WHERE ...
+)
