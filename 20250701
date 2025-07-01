@@ -1,0 +1,59 @@
+WITH
+    -- 1. 페이징 대상 PK만 추출
+    SEQ AS (
+        SELECT PKT_SEQ
+        FROM (
+            SELECT PKT_SEQ, TMSTART, OCCR_DT
+            FROM TEST
+            WHERE OCCR_DT BETWEEN '202503010000' AND '202503312359'
+              AND STRTITLE = 'abc'
+
+            UNION ALL
+
+            SELECT PKT_SEQ, TMSTART, OCCR_DT
+            FROM TEST2
+            WHERE OCCR_DT BETWEEN '202503010000' AND '202503312359'
+              AND STRTITLE = 'abc'
+        )
+        ORDER BY TMSTART, OCCR_DT, PKT_SEQ
+        LIMIT 100 OFFSET 0
+    ),
+
+    -- 2. 전체 건수 합산
+    total_count AS (
+        SELECT sum(cnt) AS total
+        FROM (
+            SELECT count() AS cnt
+            FROM TEST
+            WHERE OCCR_DT BETWEEN '202503010000' AND '202503312359'
+              AND STRTITLE = 'abc'
+
+            UNION ALL
+
+            SELECT count() AS cnt
+            FROM TEST2
+            WHERE OCCR_DT BETWEEN '202503010000' AND '202503312359'
+              AND STRTITLE = 'abc'
+        )
+    ),
+
+    -- 3. TEST + TEST2 전체 데이터 union
+    main_data AS (
+        SELECT *
+        FROM TEST
+        WHERE OCCR_DT BETWEEN '202503010000' AND '202503312359'
+          AND STRTITLE = 'abc'
+
+        UNION ALL
+
+        SELECT *
+        FROM TEST2
+        WHERE OCCR_DT BETWEEN '202503010000' AND '202503312359'
+          AND STRTITLE = 'abc'
+    )
+
+-- 4. 최종 출력: 페이징 대상 + 총 건수
+SELECT md.*, total_count.total AS RN
+FROM main_data md
+WHERE md.PKT_SEQ IN (SELECT PKT_SEQ FROM SEQ)
+ORDER BY md.TMSTART, md.OCCR_DT, md.PKT_SEQ;
