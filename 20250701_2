@@ -1,0 +1,38 @@
+WITH
+-- 페이징 대상 튜플 추출
+SEQ AS (
+    SELECT TMSTART, OCCR_DT, PKT_SEQ
+    FROM (
+        SELECT TMSTART, OCCR_DT, PKT_SEQ FROM TEST
+        WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31'
+          AND STRTITLE = 'abc'
+        UNION ALL
+        SELECT TMSTART, OCCR_DT, PKT_SEQ FROM TEST2
+        WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31'
+          AND STRTITLE = 'abc'
+    )
+    ORDER BY TMSTART DESC, OCCR_DT DESC, PKT_SEQ DESC
+    LIMIT 100
+)
+
+SELECT
+    d.*,
+    (
+        SELECT count() FROM (
+            SELECT PKT_SEQ FROM TEST WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31' AND STRTITLE = 'abc'
+            UNION ALL
+            SELECT PKT_SEQ FROM TEST2 WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31' AND STRTITLE = 'abc'
+        )
+    ) AS total_count
+
+FROM (
+    SELECT * FROM TEST
+    WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31' AND STRTITLE = 'abc'
+    UNION ALL
+    SELECT * FROM TEST2
+    WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31' AND STRTITLE = 'abc'
+) d
+
+WHERE (TMSTART, OCCR_DT, PKT_SEQ) IN (SELECT TMSTART, OCCR_DT, PKT_SEQ FROM SEQ)
+ORDER BY TMSTART DESC, OCCR_DT DESC, PKT_SEQ DESC
+SETTINGS max_threads=8, optimize_read_in_order=1;
