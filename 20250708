@@ -1,0 +1,8 @@
+-- 1. 기존 인덱스 삭제
+ALTER TABLE TEST DROP INDEX idx_title;
+
+-- 2. GRANULARITY 8로 인덱스 재생성
+ALTER TABLE TEST ADD INDEX idx_title STRTITLE TYPE set(1000) GRANULARITY 8;
+
+-- 3. 기존 데이터에 인덱스 반영 (병렬 merge + skip index 적용)
+OPTIMIZE TABLE TEST FINAL;
