@@ -15,3 +15,8 @@
 	)
             )
             AND (EXPT_STR_YN = 'N' OR EXPT_STR_YN = '1')
+
+
+ALTER TABLE TEST2 ADD INDEX idx_sip_minmax SIP TYPE minmax GRANULARITY 1;
+ALTER TABLE TEST2 ADD INDEX idx_dip_minmax DIP TYPE minmax GRANULARITY 1;
+ALTER TABLE TEST2 ADD INDEX idx_expt_str_yn EXPT_STR_YN TYPE set(100) GRANULARITY 1;
