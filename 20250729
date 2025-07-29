@@ -1,0 +1,25 @@
+✅ 1. 📚 NLP 관련 용어
+용어	발음	설명
+Intent	인텐트	문장의 목적/의도 (조회, 분석 등)
+Entity	엔터티	문장에서 추출할 주요 정보 (날짜, 장소, 대상 등)
+NER (Named Entity Recognition)	엔이알	고유명사, 숫자, 날짜 등의 개체 인식
+Schema Linking	스키마 링킹	단어를 실제 DB 테이블/컬럼에 연결
+Parsing	파싱	문장의 구조를 분석
+Template Mapping	템플릿 매핑	문장 구조를 SQL 템플릿에 대응
+
+✅ 2. 🤖 LLM / 언어 모델 관련 용어
+용어	발음	설명
+LLM (Large Language Model)	엘엘엠	대형 언어 모델 (GPT, T5 등)
+Tokenization	토크나이제이션	문장을 토큰 단위로 분해
+Embedding	엠베딩	단어/문장을 벡터로 수치화
+Prompt	프롬프트	모델에게 지시하는 입력 문장
+Few-shot Prompting	퓨샷 프롬프트잉	예시 몇 개만으로 문제 해결 유도
+Fine-tuning	파인튜닝	특정 도메인용으로 모델 재학습
+
+✅ 3. 🧩 Text-to-SQL 특화 용어
+용어	발음	설명
+Text-to-SQL	텍스트 투 에스큐엘	자연어를 SQL로 변환하는 기술
+Slot Filling	슬롯 필링	SQL 구조에 조건을 채워넣는 방식
+Query Generation	쿼리 제너레이션	SQL 문장을 생성하는 과정
+Denotation Accuracy	디노테이션 어큐러시	결과 정확도를 평가하는 지표
+Spider	스파이더	Text-to-SQL 공개 학습용 데이터셋
