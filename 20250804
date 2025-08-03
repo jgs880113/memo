@@ -1,0 +1,12 @@
+CREATE DICTIONARY dict_excluded_pkt_seq
+(
+    PKT_SEQ String
+)
+PRIMARY KEY PKT_SEQ
+SOURCE(CLICKHOUSE(TABLE 'TEST_LOG'))
+LAYOUT(HASHED())
+LIFETIME(MIN 300 MAX 600);
+
+ AND NOT dictHas('dict_excluded_pkt_seq', PKT_SEQ)
+
+ if(dictHas('dict_excluded_pkt_seq', PKT_SEQ), 'Y', 'N') AS IS_EXCLUDED
