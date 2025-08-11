@@ -1,64 +1,96 @@
+-- (SIP, STRTITLE) with FLAG in ('1','2')
 CREATE DICTIONARY dict_exip_pair_flag12
 (
-    IP String,
-    SIG_NM String
+  IP String,
+  SIG_NM String
 )
 PRIMARY KEY (IP, SIG_NM)
 SOURCE(CLICKHOUSE(TABLE '
-    SELECT IP, SIG_NM
-    FROM EXIP
-    WHERE SIG_NM IS NOT NULL AND FLAG IN (''1'',''2'')
+  SELECT IP, SIG_NM
+  FROM EXIP
+  WHERE SIG_NM IS NOT NULL AND FLAG IN (''1'',''2'')
 '))
 LAYOUT(COMPLEX_KEY_HASHED())
 LIFETIME(MIN 300 MAX 600);
 
+-- (DIP, STRTITLE) with FLAG in ('1','3')
 CREATE DICTIONARY dict_exip_pair_flag13
 (
-    IP String,
-    SIG_NM String
+  IP String,
+  SIG_NM String
 )
 PRIMARY KEY (IP, SIG_NM)
 SOURCE(CLICKHOUSE(TABLE '
-    SELECT IP, SIG_NM
-    FROM EXIP
-    WHERE SIG_NM IS NOT NULL AND FLAG IN (''1'',''3'')
+  SELECT IP, SIG_NM
+  FROM EXIP
+  WHERE SIG_NM IS NOT NULL AND FLAG IN (''1'',''3'')
 '))
 LAYOUT(COMPLEX_KEY_HASHED())
 LIFETIME(MIN 300 MAX 600);
 
+-- SIP only (SIG_NM IS NULL, FLAG in ('1','2'))
 CREATE DICTIONARY dict_exip_ip_flag12
 (
-    IP String
+  IP String
 )
 PRIMARY KEY IP
 SOURCE(CLICKHOUSE(TABLE '
-    SELECT IP
-    FROM EXIP
-    WHERE SIG_NM IS NULL AND FLAG IN (''1'',''2'')
+  SELECT IP
+  FROM EXIP
+  WHERE SIG_NM IS NULL AND FLAG IN (''1'',''2'')
 '))
 LAYOUT(HASHED())
 LIFETIME(MIN 300 MAX 600);
 
-
+-- DIP only (SIG_NM IS NULL, FLAG in ('1','3'))
 CREATE DICTIONARY dict_exip_ip_flag13
 (
-    IP String
+  IP String
 )
 PRIMARY KEY IP
 SOURCE(CLICKHOUSE(TABLE '
-    SELECT IP
-    FROM EXIP
-    WHERE SIG_NM IS NULL AND FLAG IN (''1'',''3'')
+  SELECT IP
+  FROM EXIP
+  WHERE SIG_NM IS NULL AND FLAG IN (''1'',''3'')
 '))
 LAYOUT(HASHED())
 LIFETIME(MIN 300 MAX 600);
 
 
-          -- (SIP, STRTITLE) NOT IN ...
-          AND NOT dictHas('dict_exip_pair_flag12', (SIP, STRTITLE))
-          -- (DIP, STRTITLE) NOT IN ...
-          AND NOT dictHas('dict_exip_pair_flag13', (DIP, STRTITLE))
-          -- SIP NOT IN ...
-          AND NOT dictHas('dict_exip_ip_flag12', SIP)
-          -- DIP NOT IN ...
-          AND NOT dictHas('dict_exip_ip_flag13', DIP)
+WITH
+  SEQ AS (
+    SELECT TMSTART, OCCR_DT, PKT_SEQ
+    FROM (
+      SELECT TMSTART, OCCR_DT, PKT_SEQ FROM TEST
+      UNION ALL
+      SELECT TMSTART, OCCR_DT, PKT_SEQ FROM TEST2
+    )
+    PREWHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31'  -- 스캔량 컷
+      AND STRTITLE = 'abc'
+    WHERE if(dictHas('dict_excluded_pkt_seq', PKT_SEQ), 'Y', NULL) != 'Y'
+    ORDER BY TMSTART DESC, OCCR_DT DESC, PKT_SEQ DESC
+    LIMIT 100
+  ),
+
+  main_data AS (
+    SELECT *
+    FROM (
+      SELECT * FROM TEST
+      UNION ALL
+      SELECT * FROM TEST2
+    )
+    PREWHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31'
+      AND STRTITLE = 'abc'
+    WHERE
+      -- EXIP 기반 4 조건: 모두 dictHas로 대체 (O(1) 조회)
+      NOT dictHas('dict_exip_pair_flag12', (SIP, STRTITLE))  -- (SIP, STRTITLE) NOT IN ...
+      AND NOT dictHas('dict_exip_pair_flag13', (DIP, STRTITLE))  -- (DIP, STRTITLE) NOT IN ...
+      AND NOT dictHas('dict_exip_ip_flag12', SIP)  -- SIP NOT IN ...
+      AND NOT dictHas('dict_exip_ip_flag13', DIP)  -- DIP NOT IN ...
+      -- EXPT_STR_YN: TEST_LOG에 PKT_SEQ 있으면 Y → Y만 제외(원래 의미와 동일)
+      AND if(dictHas('dict_excluded_pkt_seq', PKT_SEQ), 'Y', NULL) != 'Y'
+  )
+
+SELECT *,
+       if(dictHas('dict_excluded_pkt_seq', PKT_SEQ), 'Y', 'N') AS EXPT_STR_YN
+FROM main_data;
