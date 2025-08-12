@@ -1,0 +1,46 @@
+-- Impala / Kudu 최종 쿼리 (Oracle NOT IN과 동일한 NULL 처리 반영)
+WITH exip AS (
+  SELECT ip, sig_nm, flag
+  FROM exm_ip
+),
+exip_pair12 AS (   -- (SIP, STRTITLE) 차단
+  SELECT ip, sig_nm
+  FROM exip
+  WHERE sig_nm IS NOT NULL AND ip IS NOT NULL AND flag IN ('1','2')
+),
+exip_pair13 AS (   -- (DIP, STRTITLE) 차단
+  SELECT ip, sig_nm
+  FROM exip
+  WHERE sig_nm IS NOT NULL AND ip IS NOT NULL AND flag IN ('1','3')
+),
+exip_ip12 AS (     -- SIP 단독 차단
+  SELECT ip
+  FROM exip
+  WHERE sig_nm IS NOT NULL AND ip IS NOT NULL AND flag IN ('1','2')
+),
+exip_ip13 AS (     -- DIP 단독 차단
+  SELECT ip
+  FROM exip
+  WHERE sig_nm IS NOT NULL AND ip IS NOT NULL AND flag IN ('1','3')
+)
+SELECT t.*
+FROM test t
+-- (SIP, STRTITLE) 제외
+LEFT ANTI JOIN exip_pair12 p12
+  ON p12.ip = t.sip AND p12.sig_nm = t.strtitle
+-- (DIP, STRTITLE) 제외
+LEFT ANTI JOIN exip_pair13 p13
+  ON p13.ip = t.dip AND p13.sig_nm = t.strtitle
+-- SIP 단독 제외
+LEFT ANTI JOIN exip_ip12 i12
+  ON i12.ip = t.sip
+-- DIP 단독 제외
+LEFT ANTI JOIN exip_ip13 i13
+  ON i13.ip = t.dip
+WHERE CAST(t.occr_date AS DATE) BETWEEN DATE '2025-03-01' AND DATE '2025-03-31'
+  AND t.strtitle = 'abc'
+  -- Oracle NOT IN과 동일하게 좌변이 NULL이면 제외되도록 명시
+  AND t.sip IS NOT NULL
+  AND t.dip IS NOT NULL
+  AND t.strtitle IS NOT NULL
+;
