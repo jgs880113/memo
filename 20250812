@@ -59,3 +59,37 @@ WHERE CAST(t.occr_date AS DATE) BETWEEN DATE '2025-03-01' AND DATE '2025-03-31'
   AND t.dip IS NOT NULL
   AND t.strtitle IS NOT NULL
 ;
+
+
+WITH exip_filtered AS (
+  SELECT ip, sig_nm,
+         CASE WHEN flag IN ('1','2') THEN 'type12' ELSE 'type13' END AS exception_type
+  FROM exm_ip
+  WHERE sig_nm IS NOT NULL AND ip IS NOT NULL AND flag IN ('1','2','3')
+),
+exceptions12 AS (
+  SELECT ip, sig_nm FROM exip_filtered WHERE exception_type = 'type12'
+),
+exceptions13 AS (
+  SELECT ip, sig_nm FROM exip_filtered WHERE exception_type = 'type13'
+),
+ip_only12 AS (
+  SELECT DISTINCT ip FROM exip_filtered WHERE exception_type = 'type12'
+),
+ip_only13 AS (
+  SELECT DISTINCT ip FROM exip_filtered WHERE exception_type = 'type13'
+)
+SELECT t.*
+FROM test t
+LEFT ANTI JOIN exceptions12 e12
+  ON t.sip = e12.ip AND t.strtitle = e12.sig_nm
+LEFT ANTI JOIN exceptions13 e13
+  ON t.dip = e13.ip AND t.strtitle = e13.sig_nm
+LEFT ANTI JOIN ip_only12 i12
+  ON t.sip = i12.ip
+LEFT ANTI JOIN ip_only13 i13
+  ON t.dip = i13.ip
+WHERE t.occr_date >= TIMESTAMP '2025-03-01 00:00:00'
+  AND t.occr_date <  TIMESTAMP '2025-04-01 00:00:00'
+  AND t.strtitle = 'abc'
+;
