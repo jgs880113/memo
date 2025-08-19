@@ -1,0 +1,18 @@
+SELECT
+    database,
+    name,
+    engine,
+    cluster,
+    remote_database,
+    remote_table
+FROM system.tables
+WHERE engine = 'Distributed'
+;
+
+
+SELECT
+    name,
+    engine,
+    destination_table
+FROM system.tables
+WHERE engine = 'MaterializedView';
