@@ -1,6 +1,8 @@
 # 설정 테스트(문법 확인)
 clickhouse-server --check-config
 
+SELECT name, value
+FROM system.server_settings;
 
 경로: /etc/clickhouse-server/config.d/10-memory-and-bg.xml
 <clickhouse>
