@@ -1,0 +1,31 @@
+src/main/java/com/example/purecodetoken 경로로 이동하여, 기존에 있던 PureCodeTokenApplication.java 파일을 제외한 모든 하위 패키지와 파일을 만드세요.
+
+아래 목록의 파일을 정확한 패키지 경로에 생성하고, 제가 이전에 제공했던 전체 코드를 각각 복사해서 붙여넣기 하시면 됩니다.
+
+PureCodeTokenApplication.java (이 파일은 이미 생성되어 있습니다)
+
+config/
+
+SwaggerConfig.java
+
+JwtTokenProvider.java
+
+JwtAuthenticationFilter.java
+
+SecurityConfig.java
+
+dto/
+
+TokenInfo.java
+
+TokenReissueDto.java
+
+service/
+
+AuthService.java
+
+controller/
+
+AuthController.java
+
+ApiController.java
