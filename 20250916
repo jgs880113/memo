@@ -24,3 +24,62 @@ SELECT p.STRTITLE, p.OCCR_DT AS last_occr_dt, p.max_dip, p.max_sip
 FROM per_day p
 ANY INNER JOIN last_dt l USING (STRTITLE)
 WHERE p.OCCR_DT = l.last_occr_dt;
+
+
+
+/* 
+  목표: 윈도우(DENSE_RANK) 없이도 
+  STRTITLE마다 가장 최근 OCCR_DT의 레코드(그 날짜의 max(DIP), max(SIP))를 빠르게 구하기
+*/
+
+WITH base AS (
+  SELECT
+    PKT_SEQ, OCCR_DT, STRTITLE, SIP, DIP
+  FROM (
+    SELECT * FROM TEST
+    UNION ALL
+    SELECT * FROM TEST2
+  )
+  /* PREWHERE: 대용량 테이블에서 먼저 강한 조건을 푸시다운해 I/O 감소 */
+  PREWHERE OCCR_DT BETWEEN '2025-03-01' AND '2025-03-31'
+    AND STRTITLE = 'abc'
+    /* dictHas 대신 1회성 해시-셋을 만드는 NOT IN으로 치환 (행마다 사전 조회 X) */
+    AND PKT_SEQ NOT IN (SELECT pkt_seq FROM dict_excluded_pkt_seq_src)
+),
+
+per_day AS (
+  /* 날짜별로 먼저 집계: 그 날의 최대 SIP/DIP를 구해 두기 */
+  SELECT
+    STRTITLE,
+    OCCR_DT,
+    max(SIP) AS max_sip,
+    max(DIP) AS max_dip
+  FROM base
+  GROUP BY STRTITLE, OCCR_DT
+)
+
+/*
+  핵심 아이디어:
+  - argMax(V, K): K(키)가 최대일 때의 V(값)를 돌려주는 집계 함수
+  - 여기서는 V를 (OCCR_DT, max_dip, max_sip) '튜플'로 묶고,
+    K는 OCCR_DT로 주면, "가장 최근 날짜"에 해당하는 튜플을 통째로 얻을 수 있음.
+  - 정렬이나 윈도우 없이 집계만으로 해결 → 빠름.
+*/
+SELECT
+  STRTITLE,
+  /* tupleElement(t, N): 튜플 t의 N번째 원소를 꺼냄 (ClickHouse는 1-based 인덱스) */
+  tupleElement(t, 1) AS last_occr_dt,   -- 튜플의 1번째 = OCCR_DT
+  tupleElement(t, 2) AS max_dip,        -- 튜플의 2번째 = max_dip
+  tupleElement(t, 3) AS max_sip         -- 튜플의 3번째 = max_sip
+FROM (
+  SELECT
+    STRTITLE,
+    /* 
+      argMax(tuple(...), OCCR_DT):
+      - OCCR_DT가 가장 큰(=가장 최근) 레코드의 튜플 (OCCR_DT, max_dip, max_sip)을 반환
+      - tie가 있으면 첫 번째로 만난 것을 사용 (보통 동일 날짜면 문제 없음)
+    */
+    argMax(tuple(OCCR_DT, max_dip, max_sip), OCCR_DT) AS t
+  FROM per_day
+  GROUP BY STRTITLE
+);
