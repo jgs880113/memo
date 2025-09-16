@@ -122,3 +122,27 @@ SELECT
 FROM per_day
 GROUP BY STRTITLE;
 
+
+-- 동점 상황을 만들기 위해 같은 ts에 두 행 삽입
+CREATE TABLE demo2
+(
+  strtitle String,
+  ts       DateTime,
+  sip      UInt32,
+  dip      UInt32
+) ENGINE = Memory;
+
+INSERT INTO demo2 VALUES
+('abc','2025-03-01 12:00:00',20,200),
+('abc','2025-03-01 12:00:00',25,250),  -- ★ 같은 ts, sip가 더 큼
+('xyz','2025-03-02 13:00:00',15,150);
+
+-- Oracle: MAX(SIP) KEEP (DENSE_RANK LAST ORDER BY ts)
+-- ClickHouse 동등: argMax(sip, (ts, sip))
+SELECT
+  strtitle,
+  argMax(sip, (ts, sip)) AS max_sip_at_last_ts
+FROM demo2
+GROUP BY strtitle;
+
+
