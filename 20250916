@@ -83,3 +83,42 @@ FROM (
   FROM per_day
   GROUP BY STRTITLE
 );
+
+
+/* 25.x에서 그대로 동작 */
+
+WITH base AS (
+  /* 각 테이블에서 먼저 강한 조건을 푸시다운 */
+  SELECT PKT_SEQ, OCCR_DT, STRTITLE, SIP, DIP
+  FROM TEST
+  PREWHERE OCCR_DT BETWEEN '2025-03-01' AND '2025-03-31'
+    AND STRTITLE = 'abc'
+    AND PKT_SEQ NOT IN (SELECT pkt_seq FROM dict_excluded_pkt_seq_src)   -- dictHas 대체
+  UNION ALL
+  SELECT PKT_SEQ, OCCR_DT, STRTITLE, SIP, DIP
+  FROM TEST2
+  PREWHERE OCCR_DT BETWEEN '2025-03-01' AND '2025-03-31'
+    AND STRTITLE = 'abc'
+    AND PKT_SEQ NOT IN (SELECT pkt_seq FROM dict_excluded_pkt_seq_src)
+),
+per_day AS (
+  /* 날짜별로 먼저 집계: 그 날짜의 max SIP/DIP */
+  SELECT
+    STRTITLE,
+    OCCR_DT,
+    max(SIP) AS max_sip,
+    max(DIP) AS max_dip
+  FROM base
+  GROUP BY STRTITLE, OCCR_DT
+)
+SELECT
+  STRTITLE,
+  /* = MAX(DIP) KEEP (DENSE_RANK LAST ORDER BY OCCR_DT) */
+  argMax(max_dip, (OCCR_DT, max_dip)) AS max_dip_at_last_dt,
+  /* = MAX(SIP) KEEP (DENSE_RANK LAST ORDER BY OCCR_DT) */
+  argMax(max_sip, (OCCR_DT, max_sip)) AS max_sip_at_last_dt,
+  /* 참고용: 마지막 날짜 자체 */
+  argMax(OCCR_DT,  OCCR_DT)           AS last_occr_dt
+FROM per_day
+GROUP BY STRTITLE;
+
