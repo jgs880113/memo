@@ -1,0 +1,26 @@
+WITH base AS (
+  SELECT PKT_SEQ, OCCR_DT, STRTITLE, SIP, DIP
+  FROM
+  (
+    SELECT * FROM TEST
+    UNION ALL
+    SELECT * FROM TEST2
+  )
+  PREWHERE OCCR_DT BETWEEN '2025-03-01' AND '2025-03-31'
+    AND STRTITLE = 'abc'
+  WHERE NOT dictHas('dict_excluded_pkt_seq', PKT_SEQ)
+),
+per_day AS (
+  SELECT STRTITLE, OCCR_DT, max(SIP) AS max_sip, max(DIP) AS max_dip
+  FROM base
+  GROUP BY STRTITLE, OCCR_DT
+),
+last_dt AS (
+  SELECT STRTITLE, max(OCCR_DT) AS last_occr_dt
+  FROM per_day
+  GROUP BY STRTITLE
+)
+SELECT p.STRTITLE, p.OCCR_DT AS last_occr_dt, p.max_dip, p.max_sip
+FROM per_day p
+ANY INNER JOIN last_dt l USING (STRTITLE)
+WHERE p.OCCR_DT = l.last_occr_dt;
