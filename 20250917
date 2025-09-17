@@ -1,0 +1,54 @@
+/* ===== 파라미터: 조회 구간 & 타이틀 ===== */
+WITH
+    toDateTime('2025-03-15 00:00:00') AS dt_from,
+    toDateTime('2025-05-03 23:59:59') AS dt_to,
+    'abc' AS wanted_title,
+    /* 월 범위(연속)이므로 BETWEEN으로 커버 가능 */
+    toYYYYMM(dt_from) AS m_from,
+    toYYYYMM(dt_to)   AS m_to
+
+/* ===== 본문 ===== */
+, base AS (
+    /* TEST */
+    SELECT PKT_SEQ, OCCR_DT, STRTITLE, SIP, DIP
+    FROM TEST
+    PREWHERE OCCR_DT BETWEEN dt_from AND dt_to
+      AND STRTITLE = wanted_title
+      AND PKT_SEQ NOT IN (   -- 🔹 MV(얇은 우변)에서 해당 월 범위만 읽음
+          SELECT pkt_seq
+          FROM excluded_pkt_seq_monthly
+          WHERE month BETWEEN m_from AND m_to
+      )
+
+    UNION ALL
+
+    /* TEST2 */
+    SELECT PKT_SEQ, OCCR_DT, STRTITLE, SIP, DIP
+    FROM TEST2
+    PREWHERE OCCR_DT BETWEEN dt_from AND dt_to
+      AND STRTITLE = wanted_title
+      AND PKT_SEQ NOT IN (
+          SELECT pkt_seq
+          FROM excluded_pkt_seq_monthly
+          WHERE month BETWEEN m_from AND m_to
+      )
+),
+
+/* 날짜(또는 시각)별로 먼저 집계: 그 날의 max SIP를 구해 둠 */
+per_day AS (
+    SELECT
+        STRTITLE,
+        OCCR_DT,
+        max(SIP) AS max_sip
+    FROM base
+    GROUP BY STRTITLE, OCCR_DT
+)
+
+/* === 최종: Oracle KEEP (DENSE_RANK LAST ORDER BY OCCR_DT) 동등 ===
+   → "OCCR_DT가 최대인" 행들 중에서 SIP의 최댓값 */
+SELECT
+    STRTITLE,
+    argMax(max_sip, (OCCR_DT, max_sip)) AS max_sip_at_last_dt,  -- = KEEP LAST
+    argMax(OCCR_DT,  OCCR_DT)            AS last_occr_dt         -- 참고용(마지막 시각)
+FROM per_day
+GROUP BY STRTITLE;
