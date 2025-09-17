@@ -70,3 +70,88 @@ SELECT
   argMax(OCCR_DT,  OCCR_DT)           AS last_occr_dt         -- 참고: 마지막 시각
 FROM per_instant
 GROUP BY STRTITLE;
+
+
+SET max_rows_in_set = 100000000;
+SET max_bytes_in_set = '2GiB';
+
+
+/* ===== 파라미터 ===== */
+WITH
+    toDateTime('2025-03-15 00:00:00') AS dt_from,
+    toDateTime('2025-05-03 23:59:59') AS dt_to,
+    'abc' AS wanted_title,
+    toYYYYMM(dt_from) AS m_from,
+    toYYYYMM(dt_to)   AS m_to
+
+/* ===== 본문 ===== */
+, base AS (
+    /* TEST */
+    SELECT PKT_SEQ, OCCR_DT, STRTITLE, SIP, DIP
+    FROM TEST
+    PREWHERE OCCR_DT BETWEEN dt_from AND dt_to
+      AND STRTITLE = wanted_title
+      AND PKT_SEQ NOT IN (
+        /* TEST_LOG를 직접 사용 (MV 없음) */
+        SELECT DISTINCT pkt_seq
+        FROM TEST_LOG
+        WHERE toUInt32(substring(splitByChar('_', pkt_seq)[1], 1, 6))
+              BETWEEN m_from AND m_to
+      )
+
+    UNION ALL
+
+    /* TEST2 */
+    SELECT PKT_SEQ, OCCR_DT, STRTITLE, SIP, DIP
+    FROM TEST2
+    PREWHERE OCCR_DT BETWEEN dt_from AND dt_to
+      AND STRTITLE = wanted_title
+      AND PKT_SEQ NOT IN (
+        SELECT DISTINCT pkt_seq
+        FROM TEST_LOG
+        WHERE toUInt32(substring(splitByChar('_', pkt_seq)[1], 1, 6))
+              BETWEEN m_from AND m_to
+      )
+)
+
+/* 같은 시각(OCCR_DT) 내 SIP 최대치 먼저 계산 */
+, per_instant AS (
+    SELECT
+      STRTITLE,
+      OCCR_DT,
+      max(SIP) AS max_sip
+    FROM base
+    GROUP BY STRTITLE, OCCR_DT
+)
+
+/* === Oracle: MAX(SIP) KEEP (DENSE_RANK LAST ORDER BY OCCR_DT) 동등 ===
+   최신 OCCR_DT에서 SIP 최댓값을 선택 (동점 규칙까지 동일) */
+SELECT
+  STRTITLE,
+  argMax(max_sip, (OCCR_DT, max_sip)) AS max_sip_at_last_dt,
+  argMax(OCCR_DT,  OCCR_DT)           AS last_occr_dt
+FROM per_instant
+GROUP BY STRTITLE;
+
+
+ALTER TABLE TEST_LOG
+  ADD COLUMN month UInt32
+  MATERIALIZED toUInt32(substring(splitByChar('_', pkt_seq)[1], 1, 6));
+
+-- 이후 쿼리 우변은 이렇게:
+... WHERE month BETWEEN m_from AND m_to
+
+
+
+-- 1) month 물리 컬럼 추가 + 기존 파트에 채우기
+ALTER TABLE TEST_LOG
+  ADD COLUMN month UInt32
+  MATERIALIZED toUInt32(substring(splitByChar('_', pkt_seq)[1], 1, 6));
+
+ALTER TABLE TEST_LOG MATERIALIZE COLUMN month;   -- 기존 데이터 채움(부하 有)
+
+-- 2) month에 스키핑 인덱스(범위용 minmax) 추가 + 기존 파트에 생성
+ALTER TABLE TEST_LOG
+  ADD INDEX idx_month month TYPE minmax GRANULARITY 1;
+
+ALTER TABLE TEST_LOG MATERIALIZE INDEX idx_month; -- 기존 데이터에 인덱스 생성
