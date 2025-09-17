@@ -1,9 +1,28 @@
-/* ===== 파라미터: 조회 구간 & 타이틀 ===== */
+-- PKT_SEQ 접두(언더스코어 앞)에서 YYYYMM을 뽑아 월 파티션으로 저장
+CREATE TABLE excluded_pkt_seq_monthly
+(
+  month   UInt32,   -- 예: 202503
+  pkt_seq String
+)
+ENGINE = MergeTree
+PARTITION BY month
+ORDER BY (month, pkt_seq);
+
+CREATE MATERIALIZED VIEW mv_excluded_pkt_seq_monthly
+TO excluded_pkt_seq_monthly AS
+SELECT
+  -- '202509170961_252523' -> 왼쪽 토큰 = '202509170961' -> 앞 6자리 = '202509'
+  toUInt32( substring(splitByChar('_', pkt_seq)[1], 1, 6) ) AS month,
+  pkt_seq
+FROM TEST_LOG;   -- PKT_SEQ만 있는 로그 테이블 (String)
+
+
+
+/* ===== 파라미터 ===== */
 WITH
     toDateTime('2025-03-15 00:00:00') AS dt_from,
     toDateTime('2025-05-03 23:59:59') AS dt_to,
     'abc' AS wanted_title,
-    /* 월 범위(연속)이므로 BETWEEN으로 커버 가능 */
     toYYYYMM(dt_from) AS m_from,
     toYYYYMM(dt_to)   AS m_to
 
@@ -14,10 +33,10 @@ WITH
     FROM TEST
     PREWHERE OCCR_DT BETWEEN dt_from AND dt_to
       AND STRTITLE = wanted_title
-      AND PKT_SEQ NOT IN (   -- 🔹 MV(얇은 우변)에서 해당 월 범위만 읽음
-          SELECT pkt_seq
-          FROM excluded_pkt_seq_monthly
-          WHERE month BETWEEN m_from AND m_to
+      AND PKT_SEQ NOT IN (
+        SELECT pkt_seq
+        FROM excluded_pkt_seq_monthly
+        WHERE month BETWEEN m_from AND m_to        -- ★ 월跨 구간 대응
       )
 
     UNION ALL
@@ -28,27 +47,26 @@ WITH
     PREWHERE OCCR_DT BETWEEN dt_from AND dt_to
       AND STRTITLE = wanted_title
       AND PKT_SEQ NOT IN (
-          SELECT pkt_seq
-          FROM excluded_pkt_seq_monthly
-          WHERE month BETWEEN m_from AND m_to
+        SELECT pkt_seq
+        FROM excluded_pkt_seq_monthly
+        WHERE month BETWEEN m_from AND m_to
       )
-),
+)
 
-/* 날짜(또는 시각)별로 먼저 집계: 그 날의 max SIP를 구해 둠 */
-per_day AS (
+/* 날짜/시각별로 먼저 집계: 그 시각의 max(SIP) */
+, per_instant AS (
     SELECT
-        STRTITLE,
-        OCCR_DT,
-        max(SIP) AS max_sip
+      STRTITLE,
+      OCCR_DT,
+      max(SIP) AS max_sip
     FROM base
     GROUP BY STRTITLE, OCCR_DT
 )
 
-/* === 최종: Oracle KEEP (DENSE_RANK LAST ORDER BY OCCR_DT) 동등 ===
-   → "OCCR_DT가 최대인" 행들 중에서 SIP의 최댓값 */
+/* ===== KEEP LAST 동등 결과 ===== */
 SELECT
-    STRTITLE,
-    argMax(max_sip, (OCCR_DT, max_sip)) AS max_sip_at_last_dt,  -- = KEEP LAST
-    argMax(OCCR_DT,  OCCR_DT)            AS last_occr_dt         -- 참고용(마지막 시각)
-FROM per_day
+  STRTITLE,
+  argMax(max_sip, (OCCR_DT, max_sip)) AS max_sip_at_last_dt,  -- = MAX(SIP) KEEP ... LAST
+  argMax(OCCR_DT,  OCCR_DT)           AS last_occr_dt         -- 참고: 마지막 시각
+FROM per_instant
 GROUP BY STRTITLE;
