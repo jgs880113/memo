@@ -1,3 +1,32 @@
+WITH main_data AS ( 
+SELECT * FROM 
+( 
+SELECT * FROM TEST UNION ALL SELECT * FROM TEST2 
+) 
+WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31' 
+AND STRTITLE = 'abc' 
+-- EXPT_STR_YN: TEST_LOG에 PKT_SEQ 있으면 Y → 
+AND if(dictHas('dict_excluded_pkt_seq', PKT_SEQ), 'Y', NULL) != 'Y' 
+) 
+SELECT *
+         , if(dictHas('dict_excluded_pkt_seq', PKT_SEQ), 'Y', 'N') AS EXPT_STR_YN 
+  FROM main_data; 
+
+WITH main_data AS ( 
+SELECT OCCR_DT, STRTITLE, MAX(SIP) SIP, MAX(DIP) DIP
+    , DENSE_RANK OVER(PARTITION BY STRTITLE ORDER BY OCCR_DT DESC) DR 
+FROM 
+( 
+SELECT * FROM TEST UNION ALL SELECT * FROM TEST2 
+) 
+WHERE OCCR_DT BETWEEN '2025-03-01' AND '2025-03-31' 
+    AND STRTITLE = 'abc' 
+-- EXPT_STR_YN: TEST_LOG에 PKT_SEQ 있으면 Y → 
+AND if(dictHas('dict_excluded_pkt_seq', PKT_SEQ), 'Y', NULL) != 'Y'
+ GROUP BY OCCR_DT, STRTITLE 
+) SELECT STRTITLE, MAX(OCCR_DT),MAX(DIP),MAX(SIP) FROM main_data WHERE DR = 1 ;
+
+
 WITH base AS (
   SELECT PKT_SEQ, OCCR_DT, STRTITLE, SIP, DIP
   FROM
