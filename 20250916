@@ -149,3 +149,28 @@ SET max_rows_in_set = 100000000;
 SET max_bytes_in_set = '2GiB';
 
 
+-- PKT_SEQ에서 월(YYYYMM)을 뽑아 담는 얇은 테이블
+CREATE TABLE excluded_pkt_seq_monthly
+(
+  month   UInt32,   -- 예: 202503
+  pkt_seq String
+)
+ENGINE = MergeTree
+PARTITION BY month
+ORDER BY (month, pkt_seq);
+
+
+-- PKT_SEQ 왼쪽(언더스코어 앞)에서 월을 추출해서 실시간 적재
+-- dt 파싱 실패 대비: 파싱되면 toYYYYMM(dt), 아니면 문자열 앞 6자리(YYYYMM)로 폴백
+CREATE MATERIALIZED VIEW mv_excluded_pkt_seq_monthly
+TO excluded_pkt_seq_monthly AS
+SELECT
+  -- '202509170961_252523' -> splitByChar('_', ...)[1] = '202509170961'
+  -- 우선 베스트에포트 파싱 시도 → 성공: 해당 월, 실패: 앞 6자리로 월 추출
+  coalesce(
+    toYYYYMM(parseDateTimeBestEffortOrNull(splitByChar('_', pkt_seq)[1])),
+    toUInt32(substring(splitByChar('_', pkt_seq)[1], 1, 6))
+  ) AS month,
+  pkt_seq
+FROM TEST_LOG;
+
