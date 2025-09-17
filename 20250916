@@ -145,4 +145,7 @@ SELECT
 FROM demo2
 GROUP BY strtitle;
 
+SET max_rows_in_set = 100000000;
+SET max_bytes_in_set = '2GiB';
+
 
