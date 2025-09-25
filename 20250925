@@ -1,0 +1,9 @@
+-- 1. 저장 공간 생성
+CREATE TABLE excluded_pkt_seq_set (PKT_SEQ String) ENGINE = Set;
+
+-- 2. 자동화 엔진(MV) 생성
+CREATE MATERIALIZED VIEW excluded_pkt_seq_mv TO excluded_pkt_seq_set AS SELECT PKT_SEQ FROM TEST_LOG;
+
+-- 3. 과거 데이터 수동으로 넣어주기
+INSERT INTO excluded_pkt_seq_set SELECT DISTINCT PKT_SEQ FROM TEST_LOG;
+
