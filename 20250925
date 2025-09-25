@@ -7,3 +7,30 @@ CREATE MATERIALIZED VIEW excluded_pkt_seq_mv TO excluded_pkt_seq_set AS SELECT P
 -- 3. 과거 데이터 수동으로 넣어주기
 INSERT INTO excluded_pkt_seq_set SELECT DISTINCT PKT_SEQ FROM TEST_LOG;
 
+WITH main_data AS (
+    SELECT *
+    FROM
+    (
+        SELECT * FROM TEST
+        UNION ALL
+        SELECT * FROM TEST2
+    )
+    WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31'
+      AND STRTITLE = 'abc'
+      -- 👇 이 부분이 핵심입니다. 빠르고 가벼운 Set 테이블을 이용한 NOT IN 조회
+      AND PKT_SEQ NOT IN (SELECT PKT_SEQ FROM excluded_pkt_seq_set)
+)
+, per_instant AS (
+    SELECT
+        STRTITLE,
+        OCCR_DT,
+        max(SIP) AS max_sip
+    FROM main_data
+    GROUP BY STRTITLE, OCCR_DT
+)
+SELECT
+    STRTITLE,
+    argMax(max_sip, (OCCR_DT, max_sip)) AS max_sip_at_last_dt,
+    argMax(OCCR_DT, OCCR_DT) AS last_occr_dt
+FROM per_instant
+GROUP BY STRTITLE;
