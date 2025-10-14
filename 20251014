@@ -1,0 +1,69 @@
+-- 1) 조인 테이블 생성 (메모리 해시맵)
+CREATE TABLE ai_join
+(
+  PKT_SEQ String,
+  accury  Float32
+) ENGINE = Join(ANY, LEFT, PKT_SEQ);
+
+-- 2) 초기 적재: 최근 3개월 창만
+INSERT INTO ai_join
+SELECT PKT_SEQ, accury
+FROM AI_DIM
+WHERE updated_at >= now() - INTERVAL 3 MONTH;
+
+
+
+-- 새 스냅샷 작성
+CREATE TABLE ai_join_new
+(
+  PKT_SEQ String,
+  accury  Float32
+) ENGINE = Join(ANY, LEFT, PKT_SEQ);
+
+INSERT INTO ai_join_new
+SELECT PKT_SEQ, accury
+FROM AI_DIM
+WHERE updated_at >= now() - INTERVAL 3 MONTH;
+
+-- 원자적 교체 (조회 공백 0초)
+RENAME TABLE ai_join TO ai_join_old, ai_join_new TO ai_join;
+DROP TABLE ai_join_old;
+
+
+
+WITH src AS (
+  SELECT STRTITLE, OCCR_DT, SIP, PKT_SEQ
+  FROM TEST
+  WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31' AND STRTITLE='abc'
+  UNION ALL
+  SELECT STRTITLE, OCCR_DT, SIP, PKT_SEQ
+  FROM TEST2
+  WHERE occr_date BETWEEN '2025-03-01' AND '2025-03-31' AND STRTITLE='abc'
+),
+filtered AS (
+  SELECT STRTITLE, OCCR_DT, SIP, PKT_SEQ
+  FROM src
+  WHERE PKT_SEQ NOT IN excluded_pkt_seq_set   -- Set 엔진 테이블이면 괄호 없이도 OK
+),
+per_instant AS (
+  SELECT t.STRTITLE, t.OCCR_DT, max(t.SIP) AS max_sip
+  FROM filtered t
+  ANY INNER JOIN ai_join j
+    ON t.PKT_SEQ = j.PKT_SEQ
+  WHERE j.accury > {thr:Float32}            -- 임계값 파라미터
+  GROUP BY t.STRTITLE, t.OCCR_DT
+)
+SELECT
+  STRTITLE,
+  argMax(max_sip, (OCCR_DT, max_sip)) AS max_sip_at_last_dt,
+  argMax(OCCR_DT,  OCCR_DT)           AS last_occr_dt
+FROM per_instant
+GROUP BY STRTITLE;
+
+
+-- IN 서브쿼리 (가능하지만 직접 조인이 일반적으로 더 빠름)
+...
+WHERE PKT_SEQ NOT IN excluded_pkt_seq_set
+  AND PKT_SEQ IN (
+        SELECT PKT_SEQ FROM ai_join WHERE accury > {thr:Float32}
+      )
