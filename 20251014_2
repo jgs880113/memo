@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.repo.AiJoinMapper">
+
+  <!-- 세션 타임존을 명시적으로 고정 (선택) -->
+  <update id="setSessionTimeZone">
+    SET time_zone = 'Asia/Seoul'
+  </update>
+
+  <!-- 새 스냅샷 테이블 생성 -->
+  <update id="createNewJoin">
+    <script>
+      CREATE TABLE ${newTable}
+      (
+        PKT_SEQ String,
+        accury  Float32
+      ) ENGINE = Join(ANY, LEFT, PKT_SEQ)
+    </script>
+  </update>
+
+  <!-- 3개월 창만 적재 (스냅샷 기준시각 고정) -->
+  <update id="fillNewJoin">
+    <script>
+      WITH snap_ts AS now()
+      INSERT INTO ${newTable}
+      SELECT PKT_SEQ, accury
+      FROM AI_DIM
+      WHERE
+        toYYYYMM(updated_at) IN (
+          toYYYYMM(addMonths(snap_ts, -2)),
+          toYYYYMM(addMonths(snap_ts, -1)),
+          toYYYYMM(snap_ts)
+        )
+        AND updated_at &gt;= snap_ts - INTERVAL 3 MONTH
+        AND updated_at &lt;  snap_ts
+    </script>
+  </update>
+
+  <!-- 원자적 스왑 -->
+  <update id="renameSwap">
+    <script>
+      RENAME TABLE ai_join TO ${oldTable}, ${newTable} TO ai_join
+    </script>
+  </update>
+
+  <!-- 구 테이블 정리 -->
+  <update id="dropTable">
+    <script>
+      DROP TABLE IF EXISTS ${tableName}
+    </script>
+  </update>
+
+  <!-- 초기 1회용: ai_join 없으면 만들어두기 -->
+  <update id="createAiJoinIfAbsent">
+    CREATE TABLE IF NOT EXISTS ai_join
+    (
+      PKT_SEQ String,
+      accury  Float32
+    ) ENGINE = Join(ANY, LEFT, PKT_SEQ)
+  </update>
+
+</mapper>
+
+
+
+
+@Mapper
+public interface AiJoinMapper {
+  void setSessionTimeZone();
+  void createAiJoinIfAbsent();
+  void createNewJoin(@Param("newTable") String newTable);
+  void fillNewJoin(@Param("newTable") String newTable);
+  void renameSwap(@Param("newTable") String newTable, @Param("oldTable") String oldTable);
+  void dropTable(@Param("tableName") String tableName);
+}
+
+
+
+@Service
+@EnableScheduling
+@RequiredArgsConstructor
+public class AiJoinSwapJob {
+  private final AiJoinMapper mapper;
+
+  @PostConstruct
+  public void init() {
+    mapper.createAiJoinIfAbsent();
+  }
+
+  /** 매일 새벽 04:05 (KST) 전량 스왑 */
+  @Scheduled(cron = "0 5 4 * * *", zone = "Asia/Seoul")
+  public void nightlySwap() {
+    final String ts = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Seoul"))
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+    final String newTable = "ai_join_new_" + ts;
+    final String oldTable = "ai_join_old_" + ts;
+
+    try {
+      mapper.setSessionTimeZone();           // 선택: 세션별 TZ 고정
+      mapper.createNewJoin(newTable);        // 1) 새 테이블 생성
+      mapper.fillNewJoin(newTable);          // 2) 3개월 창만 채우기
+      mapper.renameSwap(newTable, oldTable); // 3) 원자적 스왑 (ai_join <-> new)
+      mapper.dropTable(oldTable);            // 4) 이전 스냅샷 정리
+    } catch (Exception e) {
+      // 실패 시 신규 스냅샷 잔여물 정리
+      try { mapper.dropTable(newTable); } catch (Exception ignore) {}
+      // 알림/로깅
+      throw e;
+    }
+  }
+}
