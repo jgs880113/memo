@@ -1,0 +1,9 @@
+SELECT value FROM v$parameter WHERE name = 'max_string_size';
+
+       LISTAGG(code_name, ' , ' ON OVERFLOW TRUNCATE)  WITHIN GROUP (ORDER BY code_name) 
+
+       WITH s AS ( SELECT GROUP_CONCAT(code_name, ' , ') AS txt FROM (SELECT code_name FROM your_table ORDER BY code_name) t ) 
+       SELECT CASE WHEN LENGTH(txt) <= 4000 THEN txt 
+       ELSE CONCAT( -- 3997자로 자른 뒤 마지막 구분자 ' , ' 이전까지만 남김 REGEXP_REPLACE(REGEXP_REPLACE(STRLEFT(txt, 3997), '[^,]*$', ''), '[ ]*,[ ]*$', ''), '...' ) END 
+       AS code_names 
+       FROM s;
