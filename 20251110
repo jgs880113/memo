@@ -1,2 +1,14 @@
 SELECT convertCharset(unhex(A), 'EUC-KR', 'UTF-8') FROM TEST;
 
+KO16MSWIN949: 가장 흔한 한글 인코딩입니다. (Microsoft의 CP949와 동일)
+
+KO16KSC5601: 표준 EUC-KR 인코딩입니다.
+
+AL32UTF8: 유니코드 UTF-8입니다. (만약 이 값이라면 ClickHouse의 unhex가 바로 동작했어야 하므로, 이 경우는 아닐 것입니다.)
+SELECT convertCharset(unhex(A), 'KO16MSWIN949', 'UTF-8') FROM TEST;
+
+
+
+
+SELECT reinterpretAsString(A) AS fixed_A
+FROM TEST;
