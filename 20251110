@@ -1,0 +1,2 @@
+SELECT convertCharset(unhex(A), 'EUC-KR', 'UTF-8') FROM TEST;
+
