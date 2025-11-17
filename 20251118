@@ -1,0 +1,12 @@
+// (이 코드는 예시이며, 실제로는 UDF 라이브러리로 빌드해야 함)
+public class ConvertUDF {
+    public String fromEucKr(byte[] input) {
+        if (input == null) return null;
+        try {
+            // byte[]를 'EUC-KR'로 해석하여 String 객체로 만듦
+            return new String(input, "EUC-KR"); 
+        } catch (java.io.UnsupportedEncodingException e) {
+            return null; // 또는 오류 처리
+        }
+    }
+}
