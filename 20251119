@@ -1,0 +1,14 @@
+import org.apache.hadoop.hive.ql.exec.UDF;
+import javax.xml.bind.DatatypeConverter;
+
+public class HexToKor extends UDF {
+    public String evaluate(String hexStr) {
+        if (hexStr == null) return null;
+        try {
+            // 1. 16진수 문자열을 바이트로 변환 (UNHEX 역할)
+            byte[] bytes = DatatypeConverter.parseHexBinary(hexStr);
+            // 2. 바이트를 MS-949(한글)로 해석하여 UTF-8 문자열로 반환 (convertCharset 역할)
+            return new String(bytes, "MS949");
+        } catch (Exception e) { return null; }
+    }
+}
