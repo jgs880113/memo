@@ -1,20 +1,46 @@
 import org.apache.hadoop.hive.ql.exec.UDF;
 import javax.xml.bind.DatatypeConverter;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 
-public class HexToKor extends UDF {
+public class HexToKorSafe extends UDF {
+    // MS949 디코더 준비 (매번 생성하지 않게 static 처리)
+    private static final Charset CHARSET_MS949 = Charset.forName("MS949");
+
     public String evaluate(String hexStr) {
         if (hexStr == null) return null;
+
         try {
-            // 1. 16진수 문자열을 바이트로 변환 (UNHEX 역할)
+            // 1. Hex -> Byte 변환
             byte[] bytes = DatatypeConverter.parseHexBinary(hexStr);
-            // 2. 바이트를 MS-949(한글)로 해석하여 UTF-8 문자열로 반환 (convertCharset 역할)
-            return new String(bytes, "MS949");
-        } catch (Exception e) { return null; }
+
+            // 2. 디코더 설정 (가장 중요!)
+            // 클릭하우스와 동일하게 동작하도록 "에러 발생 시 대체 문자()로 치환" 설정
+            CharsetDecoder decoder = CHARSET_MS949.newDecoder();
+            decoder.onMalformedInput(CodingErrorAction.REPLACE);       // 뭉개진 입력
+            decoder.onUnmappableCharacter(CodingErrorAction.REPLACE);  // 매핑 없는 문자
+            
+            // 필요하다면 대체 문자를 "?"로 바꿀 수도 있음 (클릭하우스 설정에 따라)
+            // decoder.replaceWith("?"); 
+
+            // 3. 변환 수행
+            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+            CharBuffer charBuffer = decoder.decode(byteBuffer);
+
+            return charBuffer.toString();
+
+        } catch (Exception e) {
+            // Hex 형식이 아예 틀린 경우(홀수 길이 등)에는 null 반환
+            return null;
+        }
     }
 }
 
 
-
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 package com.example.impala.udf;
 
