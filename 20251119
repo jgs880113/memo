@@ -12,3 +12,65 @@ public class HexToKor extends UDF {
         } catch (Exception e) { return null; }
     }
 }
+
+
+
+
+package com.example.impala.udf;
+
+import org.apache.hadoop.hive.ql.exec.UDF;
+import org.apache.hadoop.io.Text;
+
+import java.nio.charset.Charset;
+
+/**
+ * HEX 로 표현된 MS-949 바이트를 UTF-8 STRING 으로 디코딩하는 UDF
+ * 입력:  STRING  (예: "B0A1B0A2" 또는 "0xB0A1B0A2")
+ * 출력: STRING  (Impala 내부는 UTF-8)
+ */
+public class Ms949HexToUtf8 extends UDF {
+
+    private static final Charset MS949 = Charset.forName("MS949");
+
+    public Text evaluate(Text hexText) {
+        if (hexText == null) {
+            return null;
+        }
+        String hex = hexText.toString().trim();
+        if (hex.isEmpty()) {
+            return new Text("");
+        }
+
+        // 0x / 0X prefix 제거
+        if (hex.startsWith("0x") || hex.startsWith("0X")) {
+            hex = hex.substring(2);
+        }
+
+        // 길이가 홀수면 마지막 한 글자 버림 (원하면 예외 던지도록 수정 가능)
+        if ((hex.length() & 1) == 1) {
+            hex = hex.substring(0, hex.length() - 1);
+        }
+
+        byte[] bytes = hexStringToBytes(hex);
+        String decoded = new String(bytes, MS949);  // MS-949 바이트 → 문자열
+        return new Text(decoded);                   // Impala/Hive 에서는 UTF-8 로 처리
+    }
+
+    private static byte[] hexStringToBytes(String s) {
+        int len = s.length();
+        byte[] data = new byte[len / 2];
+
+        for (int i = 0; i < len; i += 2) {
+            int hi = Character.digit(s.charAt(i), 16);
+            int lo = Character.digit(s.charAt(i + 1), 16);
+
+            if (hi == -1 || lo == -1) {
+                // 잘못된 HEX 문자면 0으로 (필요하면 예외 던지도록 변경 가능)
+                data[i / 2] = 0;
+            } else {
+                data[i / 2] = (byte) ((hi << 4) + lo);
+            }
+        }
+        return data;
+    }
+}
