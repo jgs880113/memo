@@ -1,0 +1,53 @@
+import javax.xml.bind.DatatypeConverter;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.util.regex.Pattern;
+
+public class testt {
+
+    private static final Charset CHARSET_MS949 = Charset.forName("MS949");
+    // 제어 문자 제거용 정규식 (BEL, BS 등 불필요한 특수문자 제거, 줄바꿈/탭은 유지)
+    // \x00-\x08 : NULL부터 백스페이스까지 (BEL 0x07 포함)
+    // \x0B-\x0C : 수직탭, 폼피드
+    // \x0E-\x1F : 시프트 등 기타 제어문자
+// 1. 제어 문자 제거 (BEL 등)
+    private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]");
+
+    // 2. 깨진 문자(Replacement Character, )가 연속으로 2개 이상 오면 하나로 합치기 위한 정규식
+    // \uFFFD는 '' 문자의 유니코드입니다.
+    private static final String REPLACEMENT_CHAR = "\uFFFD";
+    private static final String CONSECUTIVE_REPLACEMENT = "\uFFFD+";
+    public static void main(String[] args) {
+
+        String hexStr = "a84fb10786";
+        String reulstStr = "";
+        try {
+            // 1. Hex -> Byte
+            byte[] bytes = DatatypeConverter.parseHexBinary(hexStr);
+
+            // 2. 디코딩 (깨진 글자는 로 치환)
+            CharsetDecoder decoder = CHARSET_MS949.newDecoder();
+            decoder.onMalformedInput(CodingErrorAction.REPLACE);
+            decoder.onUnmappableCharacter(CodingErrorAction.REPLACE);
+
+            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+            CharBuffer charBuffer = decoder.decode(byteBuffer);
+
+            String rawResult = charBuffer.toString();
+
+            // 3. [핵심] 잘못 살아남은 제어 문자(BEL 등) 제거
+            // 오라클은 깨진 바이트와 뒤따라온 제어문자를 묶어서 에러처리하지만,
+            // 자바는 분리해서 처리하기 때문에 발생하는 차이를 여기서 맞춤.
+            reulstStr =  CONTROL_CHARS.matcher(rawResult).replaceAll("");
+
+            // [Step 2] "" 처럼 깨진 문자가 연속되면 "" 하나로 압축 (오라클 스타일)
+            reulstStr = reulstStr.replaceAll(CONSECUTIVE_REPLACEMENT, REPLACEMENT_CHAR);
+            System.out.println(reulstStr);
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+}
