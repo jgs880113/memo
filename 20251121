@@ -1,0 +1,52 @@
+import org.apache.hadoop.hive.ql.exec.UDF;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.util.regex.Pattern;
+
+public class BinaryToKor extends UDF {
+    
+    private static final Charset CHARSET_MS949 = Charset.forName("MS949");
+    // 제어 문자 제거 정규식 (BEL 등)
+    private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]");
+    // 연속된 깨진 문자 병합용
+    private static final String REPLACEMENT_CHAR = "\uFFFD";
+    private static final String CONSECUTIVE_REPLACEMENT = "\uFFFD+";
+
+    // [변경점] 입력이 String(Hex)이 아니라 byte[](Binary)입니다.
+    public String evaluate(byte[] bytes) {
+        if (bytes == null) return null;
+
+        try {
+            // 1. 디코더 설정 (깨진 글자는 로 치환)
+            CharsetDecoder decoder = CHARSET_MS949.newDecoder();
+            decoder.onMalformedInput(CodingErrorAction.REPLACE);
+            decoder.onUnmappableCharacter(CodingErrorAction.REPLACE);
+
+            // 2. 바이트 배열을 바로 버퍼에 넣어서 디코딩
+            ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+            CharBuffer charBuffer = decoder.decode(byteBuffer);
+            
+            String result = charBuffer.toString();
+
+            // 3. 오라클 스타일 후처리 (제어 문자 제거 + 연속 에러 병합)
+            result = CONTROL_CHARS.matcher(result).replaceAll("");
+            result = result.replaceAll(CONSECUTIVE_REPLACEMENT, REPLACEMENT_CHAR);
+
+            return result;
+
+        } catch (Exception e) {
+            return null;
+        }
+    }
+}
+
+-- 1. 기존 함수와 헷갈리지 않게 이름을 bin_kor로 합니다.
+-- 2. 입력 타입을 STRING으로 해도 Java UDF는 byte[]로 받을 수 있습니다. (Hive UDF 호환성)
+--    혹시 에러가 난다면 인자 타입을 BINARY로 바꿔보세요.
+CREATE FUNCTION bin_kor(STRING) RETURNS STRING
+LOCATION '/user/impala/lib/impala-udf-binary.jar'
+SYMBOL='BinaryToKor';
+
