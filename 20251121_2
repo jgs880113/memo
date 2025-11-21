@@ -1,0 +1,59 @@
+import org.apache.hadoop.hive.ql.exec.UDF;
+import java.nio.charset.Charset;
+import java.util.Arrays;
+
+public class BinaryToKorGreedy extends UDF {
+
+    // MS949 인코딩 준비
+    private static final Charset CHARSET = Charset.forName("MS949");
+    // 오라클 스타일의 대체 문자 (검은 마름모)
+    private static final String REPLACEMENT_CHAR = "\uFFFD";
+    private static final String CONSECUTIVE_REPLACEMENT = "\uFFFD+";
+
+    public String evaluate(byte[] bytes) {
+        if (bytes == null) return null;
+
+        StringBuilder sb = new StringBuilder();
+        int len = bytes.length;
+
+        for (int i = 0; i < len; i++) {
+            int b1 = bytes[i] & 0xFF; // 현재 바이트 (unsigned로 변환)
+
+            // [판단 로직]
+            // 0x00 ~ 0x7F : ASCII 문자 (영어, 숫자, 제어문자 등)
+            // 0x80 ~ 0xFF : 한글(멀티바이트)의 시작 바이트 (Lead Byte)
+            
+            if (b1 < 0x80) {
+                // 1. ASCII 문자 처리
+                if (b1 != 0x00) { // NULL은 건너뜀 (오라클처럼)
+                    sb.append((char) b1);
+                }
+                // (1바이트 소비했으므로 루프 자동 진행)
+            } else {
+                // 2. 한글(멀티바이트) 처리 - 여기서 오라클 흉내를 냄
+                // 뒤에 문자가 남아있는지 확인
+                if (i + 1 < len) {
+                    byte b2 = bytes[i + 1];
+                    
+                    // 두 바이트를 묶어서 MS949로 변환 시도
+                    // 여기서 b2가 '@'이든 뭐든 상관없이 같이 묶어서 던집니다.
+                    String chunk = new String(new byte[]{bytes[i], b2}, CHARSET);
+
+                    // 만약 자바가 해석 못해서 깨진 문자()가 나오더라도
+                    // 이미 b2(@)는 chunk 안에 포함되어 소모되었음.
+                    sb.append(chunk);
+                    
+                    // [핵심] 두 번째 바이트(b2)를 강제로 소비함!
+                    i++; 
+                } else {
+                    // 짝이 없는 마지막 바이트라면 그냥 에러 처리
+                    sb.append(REPLACEMENT_CHAR);
+                }
+            }
+        }
+
+        // 연속된 깨진 문자 병합 (...) -> ()
+        return sb.toString().replaceAll(CONSECUTIVE_REPLACEMENT, REPLACEMENT_CHAR);
+    }
+}
+
