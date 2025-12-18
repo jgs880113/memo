@@ -1,0 +1,49 @@
+WITH base AS (
+  SELECT
+    id,
+    ts_str,
+    CAST(UNIX_TIMESTAMP(ts_str, 'yyyy-MM-dd HH:mm') / 60 AS BIGINT) AS minute_idx
+  FROM your_table
+  WHERE ts_str IS NOT NULL
+),
+step1 AS (
+  SELECT
+    id,
+    ts_str,
+    minute_idx,
+    LAG(minute_idx) OVER (PARTITION BY id ORDER BY minute_idx) AS prev_minute_idx
+  FROM base
+),
+step2 AS (
+  SELECT
+    id,
+    ts_str,
+    minute_idx,
+    CASE
+      WHEN prev_minute_idx IS NULL THEN 1
+      WHEN minute_idx = prev_minute_idx + 1 THEN 0
+      ELSE 1
+    END AS new_grp_flag
+  FROM step1
+),
+step3 AS (
+  SELECT
+    id,
+    ts_str,
+    minute_idx,
+    SUM(new_grp_flag) OVER (
+      PARTITION BY id
+      ORDER BY minute_idx
+      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS grp
+  FROM step2
+)
+SELECT
+  id,
+  grp AS segment_no,
+  MIN(ts_str) AS segment_min_ts,
+  MAX(ts_str) AS segment_max_ts,
+  COUNT(*)    AS segment_points
+FROM step3
+GROUP BY id, grp
+ORDER BY id, segment_min_ts;
