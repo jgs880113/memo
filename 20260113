@@ -1,0 +1,17 @@
+CREATE TABLE kudu_timestamp_partition_table (
+  id BIGINT,
+  event_time TIMESTAMP,
+  user_name STRING,
+  -- 중요: Range 파티션을 할 컬럼(event_time)은 PK에 포함되어야 합니다.
+  PRIMARY KEY (id, event_time)
+)
+PARTITION BY RANGE (event_time) (
+  -- 초기 파티션 설정 (예: 2024년, 2025년 데이터)
+  PARTITION '2024-01-01 00:00:00' <= VALUES < '2025-01-01 00:00:00',
+  PARTITION '2025-01-01 00:00:00' <= VALUES < '2026-01-01 00:00:00'
+)
+STORED AS KUDU;
+
+
+ALTER TABLE kudu_timestamp_partition_table
+ADD RANGE PARTITION '2026-01-01 00:00:00' <= VALUES < '2027-01-01 00:00:00';
