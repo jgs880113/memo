@@ -39,6 +39,98 @@ WHERE sdata IS NOT NULL
 | `1F8B` | GZIP |
 | `504B0304` | ZIP |
 | `789C`, `78DA` | zlib |
+
+
+
+WITH sample AS (
+    SELECT
+        pk_column,
+        UPPER(TRIM(sdata)) AS hex_value
+    FROM your_table
+    WHERE sdata IS NOT NULL
+      AND ROWNUM <= 20
+)
+SELECT
+    pk_column,
+    LENGTH(hex_value) AS hex_length,
+    SUBSTR(hex_value, 1, 500) AS hex_sample,
+    SUBSTR(hex_value, 1, 32) AS header_hex,
+    CASE
+        WHEN NOT REGEXP_LIKE(hex_value, '^[0-9A-F]*$')
+            THEN 'INVALID_HEX'
+
+        WHEN MOD(LENGTH(hex_value), 2) <> 0
+            THEN 'ODD_LENGTH_HEX'
+
+        WHEN hex_value LIKE 'EFBBBF%'
+            THEN 'UTF8_WITH_BOM'
+
+        WHEN hex_value LIKE 'FEFF%'
+            THEN 'UTF16_BE_WITH_BOM'
+
+        WHEN hex_value LIKE 'FFFE%'
+            THEN 'UTF16_LE_WITH_BOM'
+
+        WHEN hex_value LIKE '1F8B%'
+            THEN 'GZIP'
+
+        WHEN hex_value LIKE '504B0304%'
+          OR hex_value LIKE '504B0506%'
+          OR hex_value LIKE '504B0708%'
+            THEN 'ZIP'
+
+        WHEN hex_value LIKE '789C%'
+          OR hex_value LIKE '78DA%'
+          OR hex_value LIKE '7801%'
+            THEN 'ZLIB_POSSIBLE'
+
+        WHEN hex_value LIKE 'ACED0005%'
+            THEN 'JAVA_SERIALIZATION'
+
+        WHEN hex_value LIKE '25504446%'
+            THEN 'PDF'
+
+        WHEN hex_value LIKE '89504E470D0A1A0A%'
+            THEN 'PNG'
+
+        WHEN hex_value LIKE 'FFD8FF%'
+            THEN 'JPEG'
+
+        WHEN hex_value LIKE '7B%'
+            THEN 'JSON_OBJECT_POSSIBLE'
+
+        WHEN hex_value LIKE '5B%'
+            THEN 'JSON_ARRAY_POSSIBLE'
+
+        WHEN hex_value LIKE '3C%'
+            THEN 'XML_OR_HTML_POSSIBLE'
+
+        WHEN REGEXP_LIKE(
+                 SUBSTR(hex_value, 1, 100),
+                 '^([0-7][0-9A-F])+$'
+             )
+            THEN 'ASCII_POSSIBLE'
+
+        WHEN REGEXP_LIKE(
+                 SUBSTR(hex_value, 1, 100),
+                 '^([0-9A-F]{2}00)+'
+             )
+            THEN 'UTF16_LE_POSSIBLE_NO_BOM'
+
+        WHEN REGEXP_LIKE(
+                 SUBSTR(hex_value, 1, 100),
+                 '^(00[0-9A-F]{2})+'
+             )
+            THEN 'UTF16_BE_POSSIBLE_NO_BOM'
+
+        ELSE 'UNKNOWN_BINARY_OR_TEXT'
+    END AS estimated_format
+FROM sample
+ORDER BY pk_column;
+
+
+
+
 | `ACED0005` | Java 직렬화 |
 | `7B`, `5B` | JSON 가능성 |
 | `3C` | XML 가능성 |
