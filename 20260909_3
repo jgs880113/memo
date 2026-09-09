@@ -33,3 +33,150 @@ SELECT ROOT_SIP SIP
 FROM BASE_CONNECT_UNION
 GROUP BY ROOT_SIP, ROOT_DIP, ROOT_SPORT, ROOT_DPORT
 ) SELECT * FROM BASE_CONNECT_RESULT;
+
+
+WITH RECURSIVE
+
+BASE_CONNECT_TWOWAY AS
+(
+    /* Oracle: START WITH SIP < DIP */
+    SELECT
+        P.PKT_SEQ,
+        P.SIP,
+        P.DIP,
+        P.NSPORT,
+        P.NDPORT,
+        P.CNT,
+
+        P.SIP     AS ROOT_SIP,
+        P.NSPORT  AS ROOT_SPORT,
+        P.DIP     AS ROOT_DIP,
+        P.NDPORT  AS ROOT_DPORT,
+
+        toUInt64(1) AS LV,
+        [P.PKT_SEQ] AS VISITED_SEQ
+
+    FROM PKT1M AS P
+    WHERE P.SIP < P.DIP
+
+    UNION ALL
+
+    /* Oracle: CONNECT BY NOCYCLE */
+    SELECT
+        C.PKT_SEQ,
+        C.SIP,
+        C.DIP,
+        C.NSPORT,
+        C.NDPORT,
+        C.CNT,
+
+        P.ROOT_SIP,
+        P.ROOT_SPORT,
+        P.ROOT_DIP,
+        P.ROOT_DPORT,
+
+        P.LV + toUInt64(1) AS LV,
+        arrayPushBack(P.VISITED_SEQ, C.PKT_SEQ) AS VISITED_SEQ
+
+    FROM BASE_CONNECT_TWOWAY AS P
+
+    /* ALL: 조건에 맞는 모든 자식 행을 보존 */
+    ALL INNER JOIN PKT1M AS C
+        ON  C.SIP     = P.DIP
+        AND C.NSPORT  = P.NDPORT
+        AND C.DIP     = P.SIP
+        AND C.NDPORT  = P.NSPORT
+
+    /* NOCYCLE: 현재 경로에서 같은 PKT_SEQ 재방문 방지 */
+    WHERE NOT has(P.VISITED_SEQ, C.PKT_SEQ)
+),
+
+BASE_CONNECT_ONEWAY AS
+(
+    SELECT
+        P.SIP,
+        P.DIP,
+        P.NSPORT,
+        P.NDPORT,
+        P.CNT,
+
+        P.SIP     AS ROOT_SIP,
+        P.NSPORT  AS ROOT_SPORT,
+        P.DIP     AS ROOT_DIP,
+        P.NDPORT  AS ROOT_DPORT,
+
+        toUInt64(1) AS LV
+
+    FROM PKT1M AS P
+
+    /* Oracle NOT EXISTS와 동일한 연결 키 기준 */
+    LEFT ANTI JOIN
+    (
+        SELECT DISTINCT
+            SIP,
+            DIP,
+            NSPORT,
+            NDPORT
+        FROM BASE_CONNECT_TWOWAY
+    ) AS T
+        ON  T.SIP     = P.SIP
+        AND T.DIP     = P.DIP
+        AND T.NSPORT  = P.NSPORT
+        AND T.NDPORT  = P.NDPORT
+),
+
+BASE_CONNECT_UNION AS
+(
+    SELECT
+        SIP,
+        DIP,
+        NSPORT,
+        NDPORT,
+        CNT,
+        ROOT_SIP,
+        ROOT_SPORT,
+        ROOT_DIP,
+        ROOT_DPORT,
+        LV
+    FROM BASE_CONNECT_TWOWAY
+
+    UNION ALL
+
+    SELECT
+        SIP,
+        DIP,
+        NSPORT,
+        NDPORT,
+        CNT,
+        ROOT_SIP,
+        ROOT_SPORT,
+        ROOT_DIP,
+        ROOT_DPORT,
+        LV
+    FROM BASE_CONNECT_ONEWAY
+),
+
+BASE_CONNECT_RESULT AS
+(
+    SELECT
+        ROOT_SIP   AS SIP,
+        ROOT_DIP   AS DIP,
+        ROOT_SPORT AS NSPORT,
+        ROOT_DPORT AS NDPORT,
+        SUM(CNT)   AS SUM_CNT
+
+    FROM BASE_CONNECT_UNION
+
+    GROUP BY
+        ROOT_SIP,
+        ROOT_DIP,
+        ROOT_SPORT,
+        ROOT_DPORT
+)
+
+SELECT *
+FROM BASE_CONNECT_RESULT;
+
+SETTINGS
+    join_default_strictness = 'ALL',
+    max_recursive_cte_evaluation_depth = 30000;
