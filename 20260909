@@ -1,0 +1,45 @@
+오라클 환경 확인
+
+SELECT *
+FROM nls_database_parameters
+WHERE parameter IN (
+    'NLS_CHARACTERSET',
+    'NLS_NCHAR_CHARACTERSET'
+);
+
+SELECT *
+FROM nls_session_parameters
+WHERE parameter IN (
+    'NLS_LANGUAGE',
+    'NLS_TERRITORY',
+    'NLS_SORT',
+    'NLS_COMP'
+);
+
+
+SELECT COUNT(*) AS different_count
+FROM your_table
+WHERE sdata IS NOT NULL
+  AND MOD(LENGTH(sdata), 2) = 0
+  AND REGEXP_L_LIKE(sdata,, '^[0-9A-Fa-f]*$')
+  AND (
+      UTL_RAW.CAST_TO_VARCHAR2(sdata)
+      <>
+      UTL_RAW.CAST_TO_VARCHAR2(HEXTORAW(sdata))
+  );
+
+
+
+실제 원본 바이트의 인코딩을 알아내서 세 DB에 동일하게 지정해야 합니다
+  | 시작 hex | 가능성 |
+|---|---|
+| `EFBBBF` | UTF-8 BOM |
+| `FEFF` | UTF-16 BE |
+| `FFFE` | UTF-16 LE |
+| `1F8B` | GZIP |
+| `504B0304` | ZIP |
+| `789C`, `78DA` | zlib |
+| `ACED0005` | Java 직렬화 |
+| `7B`, `5B` | JSON 가능성 |
+| `3C` | XML 가능성 |
+  
