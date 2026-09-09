@@ -1,0 +1,296 @@
+2. UTF-8 BOM인 경우
+시작 hex:
+EFBBBF
+BOM 3바이트, 즉 hex 6글자를 제거합니다.
+Oracle:
+SELECT *
+FROM your_table
+WHERE REGEXP_LIKE(
+    UTL_I18N.RAW_TO_CHAR(
+        HEXTORAW(SUBSTR(sdata, 7)),
+        'AL32UTF8'
+    ),
+    'your_pattern',
+    'i'
+);
+ClickHouse:
+SELECT *
+FROM your_table
+WHERE match(
+    unhex(substring(sdata, 7)),
+    '(?i)your_pattern'
+);
+Impala:
+SELECT *
+FROM your_table
+WHERE REGEXP_LIKE(
+    UNHEX(SUBSTR(sdata, 7)),
+    'your_pattern',
+    'i'
+);
+BOM을 제거하지 않아도 중간 문자열 검색은 대부분 되지만, ^처럼 문자열 시작점을 검사하는 패턴은 결과가 달라질 수 있으므로 제거하는 것이 안전합니다.
+3. UTF-8 또는 ASCII이며 BOM이 없는 경우
+예를 들어 다음처럼 시작합니다.
+7B226E616D65223A...
+디코딩하면:
+{"name":...
+Oracle:
+SELECT *
+FROM your_table
+WHERE REGEXP_LIKE(
+    UTL_I18N.RAW_TO_CHAR(
+        HEXTORAW(sdata),
+        'AL32UTF8'
+    ),
+    'your_pattern',
+    'i'
+);
+ClickHouse:
+SELECT *
+FROM your_table
+WHERE match(
+    unhex(sdata),
+    '(?i)your_pattern'
+);
+Impala:
+SELECT *
+FROM your_table
+WHERE REGEXP_LIKE(
+    UNHEX(sdata),
+    'your_pattern',
+    'i'
+);
+ASCII는 UTF-8의 부분집합이므로 동일한 쿼리를 사용할 수 있습니다.
+4. UTF-16 Big Endian인 경우
+시작 hex:
+FEFF
+또는 BOM 없이 ASCII 영역이 다음처럼 보일 수 있습니다.
+004100420043
+Oracle에서 지원 문자셋을 먼저 확인합니다.
+SELECT
+    NLS_CHARSET_ID('AL16UTF16') AS charset_id
+FROM dual;
+0이 아닌 값이면 사용할 수 있습니다.
+Oracle:
+SELECT *
+FROM your_table
+WHERE REGEXP_LIKE(
+    UTL_I18N.RAW_TO_CHAR(
+        HEXTORAW(SUBSTR(sdata, 5)),
+        'AL16UTF16'
+    ),
+    'your_pattern',
+    'i'
+);
+ClickHouse:
+SELECT *
+FROM your_table
+WHERE match(
+    convertCharset(
+        unhex(substring(sdata, 5)),
+        'UTF-16BE',
+        'UTF-8'
+    ),
+    '(?i)your_pattern'
+);
+Impala에는 범용 UTF-16 변환 함수가 없으므로 조회용 UDF가 필요합니다.
+SELECT *
+FROM your_table
+WHERE REGEXP_LIKE(
+    CONVERT_TO_UTF8_UDF(
+        UNHEX(SUBSTR(sdata, 5)),
+        'UTF-16BE'
+    ),
+    'your_pattern',
+    'i'
+);
+BOM이 없다면 SUBSTR(sdata, 5) 대신 sdata 전체를 사용합니다.
+5. UTF-16 Little Endian인 경우
+시작 hex:
+FFFE
+또는 BOM 없이 ASCII 영역이 다음처럼 보일 수 있습니다.
+410042004300
+Oracle에서 해당 문자셋 지원 여부를 확인합니다.
+SELECT
+    NLS_CHARSET_ID('AL16UTF16LE') AS charset_id
+FROM dual;
+0이 아니라면:
+SELECT *
+FROM your_table
+WHERE REGEXP_LIKE(
+    UTL_I18N.RAW_TO_CHAR(
+        HEXTORAW(SUBSTR(sdata, 5)),
+        'AL16UTF16LE'
+    ),
+    'your_pattern',
+    'i'
+);
+ClickHouse:
+SELECT *
+FROM your_table
+WHERE match(
+    convertCharset(
+        unhex(substring(sdata, 5)),
+        'UTF-16LE',
+        'UTF-8'
+    ),
+    '(?i)your_pattern'
+);
+Impala:
+SELECT *
+FROM your_table
+WHERE REGEXP_LIKE(
+    CONVERT_TO_UTF8_UDF(
+        UNHEX(SUBSTR(sdata, 5)),
+        'UTF-16LE'
+    ),
+    'your_pattern',
+    'i'
+);
+CONVERT_TO_UTF8_UDF는 예시 이름이며 직접 구현·등록해야 하는 함수입니다.
+6. CP949 또는 EUC-KR 가능성 검사
+CP949와 EUC-KR은 고정된 BOM이 없어서 hex만으로 확정하기 어렵습니다. 동일 데이터를 여러 문자셋으로 시험 변환해 사람이 확인해야 합니다.
+Oracle:
+SELECT
+    pk_column,
+    SUBSTR(
+        UTL_I18N.RAW_TO_CHAR(
+            HEXTORAW(sdata),
+            'KO16MSWIN949'
+        ),
+        1,
+        200
+    ) AS cp949_text,
+    SUBSTR(
+        UTL_I18N.RAW_TO_CHAR(
+            HEXTORAW(sdata),
+            'KO16KSC5601'
+        ),
+        1,
+        200
+    ) AS euckr_text,
+    SUBSTR(
+        UTL_I18N.RAW_TO_CHAR(
+            HEXTORAW(sdata),
+            'AL32UTF8'
+        ),
+        1,
+        200
+    ) AS utf8_text
+FROM your_table
+WHERE sdata IS NOT NULL
+  AND ROWNUM <= 20;
+ClickHouse:
+SELECT
+    pk_column,
+    substring(
+        convertCharset(unhex(sdata), 'CP949', 'UTF-8'),
+        1,
+        200
+    ) AS cp949_text,
+    substring(
+        convertCharset(unhex(sdata), 'EUC-KR', 'UTF-8'),
+        1,
+        200
+    ) AS euckr_text,
+    substring(unhex(sdata), 1, 200) AS utf8_text
+FROM your_table
+WHERE sdata IS NOT NULL
+LIMIT 20;
+정상적으로 읽히는 인코딩이 확인되면 해당 변환을 정규식 앞에 적용합니다.
+7. GZIP인 경우
+시작 hex:
+1F8B
+이 값은 문자 인코딩이 아니라 압축 데이터입니다.
+hex 해제 → GZIP 압축 해제 → 문자셋 변환 → 정규식
+단순히 다음처럼 처리하면 안 됩니다.
+-- 잘못된 방식
+REGEXP_LIKE(UNHEX(sdata), 'your_pattern', 'i')
+Oracle, ClickHouse, Impala 모두 동일하게 처리하려면 동일한 압축 해제 UDF가 가장 안전합니다.
+개념적인 쿼리:
+-- Oracle
+REGEXP_LIKE(
+    GZIP_TO_UTF8_UDF(HEXTORAW(sdata)),
+    'your_pattern',
+    'i'
+)
+-- ClickHouse
+match(
+    gzipToUtf8UDF(unhex(sdata)),
+    '(?i)your_pattern'
+)
+-- Impala
+REGEXP_LIKE(
+    GZIP_TO_UTF8_UDF(UNHEX(sdata)),
+    'your_pattern',
+    'i'
+)
+Oracle의 UTL_COMPRESS를 일반 GZIP 데이터에 바로 적용할 수 있다고 가정하면 안 됩니다. 압축 생성 방식과 헤더를 확인해야 합니다.
+8. ZIP 또는 zlib인 경우
+ZIP:
+504B0304
+zlib 가능 헤더:
+789C
+78DA
+7801
+처리 순서:
+hex 해제
+→ ZIP/zlib 압축 해제
+→ 내부 파일 또는 payload 추출
+→ 문자 인코딩 적용
+→ 정규식
+ZIP은 여러 파일을 포함할 수 있으므로 단일 문자열 변환 함수만으로 처리할 수 없을 수 있습니다. 세 DB에서 결과를 맞추려면 같은 규칙의 UDF가 필요합니다.
+-- 개념적 형태
+REGEXP_LIKE(
+    ZLIB_TO_UTF8_UDF(UNHEX(sdata)),
+    'your_pattern',
+    'i'
+)
+원본 데이터는 바뀌지 않고 조회 시점에만 압축을 해제합니다.
+9. Java 직렬화 데이터인 경우
+시작 hex:
+ACED0005
+이 데이터는 일반 문자열이 아닙니다.
+hex 해제
+→ Java 직렬화 역직렬화
+→ 검사할 필드 추출
+→ 문자열 변환
+→ 정규식
+예시:
+REGEXP_LIKE(
+    JAVA_DESERIALIZE_FIELD_UDF(
+        UNHEX(sdata),
+        'field_name'
+    ),
+    'your_pattern',
+    'i'
+)
+Java 역직렬화는 보안 위험이 있으므로 임의 객체를 실제로 생성하는 방식은 피하고, 허용된 타입만 읽는 안전한 파서를 사용해야 합니다.
+10. PDF·PNG·JPEG 같은 바이너리인 경우
+다음과 같은 헤더가 나오면 텍스트 문자셋 변환 대상이 아닙니다.
+25504446             PDF
+89504E470D0A1A0A     PNG
+FFD8FF               JPEG
+이 경우 UTL_RAW.CAST_TO_VARCHAR2() 결과에 정규식을 적용하는 것은 “파일 내부의 의미 있는 텍스트” 검색이 아니라 바이너리 바이트를 문자처럼 해석해 검색하는 것입니다.
+세 DB에서 동일하게 하려면:
+- PDF: PDF 텍스트 추출기
+- 이미지: 메타데이터 파서 또는 OCR
+- 일반 바이너리: 포맷별 파서
+가 필요합니다.
+단순 ASCII 바이트 시퀀스만 찾는다면 디코딩된 바이트에 ASCII 패턴을 적용할 수 있지만, 일반 정규식의 완전한 동일성은 보장하기 어렵습니다.
+현장에서 가져오면 좋은 결과
+다음 네 가지를 가져오면 포맷과 최종 쿼리를 더 정확히 정할 수 있습니다.
+SELECT
+    pk_column,
+    LENGTH(sdata) AS hex_length,
+    SUBSTR(UPPER(TRIM(sdata)), 1, 500) AS hex_sample,
+    SUBSTR(UPPER(TRIM(sdata)), 1, 32) AS header_hex
+FROM your_table
+WHERE sdata IS NOT NULL
+  AND ROWNUM <= 20;
+그리고 함께 필요한 정보는:
+1. 위 샘플 결과
+2. 실제 your_pattern
+3. Oracle NLS_CHARACTERSET
+4. Oracle·ClickHouse·Impala 각각의 일치 건수
+특히 header_hex만으로 포맷이 확정되지 않을 수 있으므로 가능하면 서로 다른 행 10~20건을 가져오는 것이 좋습니다.
