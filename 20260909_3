@@ -253,3 +253,52 @@ GROUP BY
     NDPORT
 
 SETTINGS join_use_nulls = 0;
+
+WITH BASE_GROUP AS
+(
+    SELECT
+        if(SIP < DIP, SIP, DIP)         AS GROUP_SIP,
+        if(SIP < DIP, DIP, SIP)         AS GROUP_DIP,
+        if(SIP < DIP, NSPORT, NDPORT)   AS GROUP_SPORT,
+        if(SIP < DIP, NDPORT, NSPORT)   AS GROUP_DPORT,
+
+        countIf(SIP < DIP) > 0          AS HAS_FORWARD,
+        SUM(CNT)                        AS SUM_CNT
+
+    FROM PKT1M
+
+    GROUP BY
+        GROUP_SIP,
+        GROUP_DIP,
+        GROUP_SPORT,
+        GROUP_DPORT
+)
+
+SELECT
+    if(
+        HAS_FORWARD OR GROUP_SIP = GROUP_DIP,
+        GROUP_SIP,
+        GROUP_DIP
+    ) AS SIP,
+
+    if(
+        HAS_FORWARD OR GROUP_SIP = GROUP_DIP,
+        GROUP_DIP,
+        GROUP_SIP
+    ) AS DIP,
+
+    if(
+        HAS_FORWARD OR GROUP_SIP = GROUP_DIP,
+        GROUP_SPORT,
+        GROUP_DPORT
+    ) AS NSPORT,
+
+    if(
+        HAS_FORWARD OR GROUP_SIP = GROUP_DIP,
+        GROUP_DPORT,
+        GROUP_SPORT
+    ) AS NDPORT,
+
+    SUM_CNT
+
+FROM BASE_GROUP;
