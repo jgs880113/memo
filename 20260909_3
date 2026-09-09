@@ -180,3 +180,76 @@ FROM BASE_CONNECT_RESULT;
 SETTINGS
     join_default_strictness = 'ALL',
     max_recursive_cte_evaluation_depth = 30000;
+
+
+WITH
+BASE_AGG AS
+(
+    SELECT
+        SIP,
+        DIP,
+        NSPORT,
+        NDPORT,
+        SUM(CNT) AS SUM_CNT
+    FROM PKT1M
+    GROUP BY
+        SIP,
+        DIP,
+        NSPORT,
+        NDPORT
+),
+
+BASE_AGG_MATCH AS
+(
+    SELECT
+        SIP,
+        DIP,
+        NSPORT,
+        NDPORT,
+        SUM_CNT,
+        toUInt8(1) AS IS_MATCHED
+    FROM BASE_AGG
+)
+
+SELECT
+    if(
+        A.SIP > A.DIP AND B.IS_MATCHED = 1,
+        A.DIP,
+        A.SIP
+    ) AS SIP,
+
+    if(
+        A.SIP > A.DIP AND B.IS_MATCHED = 1,
+        A.SIP,
+        A.DIP
+    ) AS DIP,
+
+    if(
+        A.SIP > A.DIP AND B.IS_MATCHED = 1,
+        A.NDPORT,
+        A.NSPORT
+    ) AS NSPORT,
+
+    if(
+        A.SIP > A.DIP AND B.IS_MATCHED = 1,
+        A.NSPORT,
+        A.NDPORT
+    ) AS NDPORT,
+
+    SUM(A.SUM_CNT) AS SUM_CNT
+
+FROM BASE_AGG AS A
+
+ANY LEFT JOIN BASE_AGG_MATCH AS B
+    ON  B.SIP     = A.DIP
+    AND B.DIP     = A.SIP
+    AND B.NSPORT  = A.NDPORT
+    AND B.NDPORT  = A.NSPORT
+
+GROUP BY
+    SIP,
+    DIP,
+    NSPORT,
+    NDPORT
+
+SETTINGS join_use_nulls = 0;
