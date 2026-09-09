@@ -1,3 +1,55 @@
+1. ClickHouse 의도 구현 쿼리
+양방향 트래픽은 작은 IP → 큰 IP로 합치고, 단방향 트래픽은 원래 방향을 유지합니다. 각 CNT는 정확히 한 번만 합산합니다.
+WITH BASE_GROUP AS
+(
+    SELECT
+        if(SIP <= DIP, SIP, DIP)       AS GROUP_SIP,
+        if(SIP <= DIP, DIP, SIP)       AS GROUP_DIP,
+        if(SIP <= DIP, NSPORT, NDPORT) AS GROUP_SPORT,
+        if(SIP <= DIP, NDPORT, NSPORT) AS GROUP_DPORT,
+
+        countIf(SIP < DIP) > 0 AS HAS_FORWARD,
+        SUM(CNT)               AS SUM_CNT
+
+    FROM PKT1M
+
+    GROUP BY
+        GROUP_SIP,
+        GROUP_DIP,
+        GROUP_SPORT,
+        GROUP_DPORT
+)
+
+SELECT
+    if(
+        HAS_FORWARD OR GROUP_SIP = GROUP_DIP,
+        GROUP_SIP,
+        GROUP_DIP
+    ) AS SIP,
+
+    if(
+        HAS_FORWARD OR GROUP_SIP = GROUP_DIP,
+        GROUP_DIP,
+        GROUP_SIP
+    ) AS DIP,
+
+    if(
+        HAS_FORWARD OR GROUP_SIP = GROUP_DIP,
+        GROUP_SPORT,
+        GROUP_DPORT
+    ) AS NSPORT,
+
+    if(
+        HAS_FORWARD OR GROUP_SIP = GROUP_DIP,
+        GROUP_DPORT,
+        GROUP_SPORT
+    ) AS NDPORT,
+
+    SUM_CNT
+
+FROM BASE_GROUP;
+2. Impala 의도 구현 쿼리
+ClickHouse 의도 쿼리와 같은 로직입니다.
 WITH BASE_NORMALIZED AS
 (
     SELECT
@@ -27,6 +79,7 @@ WITH BASE_NORMALIZED AS
         END AS IS_FORWARD,
 
         CNT
+
     FROM PKT1M
 ),
 
@@ -82,3 +135,147 @@ SELECT
     SUM_CNT
 
 FROM BASE_GROUP;
+3. ClickHouse에서 Oracle 결과 그대로 재현
+PKT_SEQ 단위로 NOCYCLE을 구현하여 Oracle의 경로별 중복까지 재현합니다.
+WITH RECURSIVE
+
+BASE_CONNECT_TWOWAY AS
+(
+    /* Oracle: START WITH SIP < DIP */
+    SELECT
+        P.PKT_SEQ,
+        P.SIP,
+        P.DIP,
+        P.NSPORT,
+        P.NDPORT,
+        P.CNT,
+
+        P.SIP     AS ROOT_SIP,
+        P.NSPORT  AS ROOT_SPORT,
+        P.DIP     AS ROOT_DIP,
+        P.NDPORT  AS ROOT_DPORT,
+
+        toUInt64(1) AS LV,
+        [P.PKT_SEQ] AS VISITED_SEQ
+
+    FROM PKT1M AS P
+    WHERE P.SIP < P.DIP
+
+    UNION ALL
+
+    /* Oracle: CONNECT BY NOCYCLE */
+    SELECT
+        C.PKT_SEQ,
+        C.SIP,
+        C.DIP,
+        C.NSPORT,
+        C.NDPORT,
+        C.CNT,
+
+        P.ROOT_SIP,
+        P.ROOT_SPORT,
+        P.ROOT_DIP,
+        P.ROOT_DPORT,
+
+        P.LV + toUInt64(1) AS LV,
+        arrayPushBack(P.VISITED_SEQ, C.PKT_SEQ) AS VISITED_SEQ
+
+    FROM BASE_CONNECT_TWOWAY AS P
+
+    ALL INNER JOIN PKT1M AS C
+        ON  C.SIP     = P.DIP
+        AND C.DIP     = P.SIP
+        AND C.NSPORT  = P.NDPORT
+        AND C.NDPORT  = P.NSPORT
+
+    WHERE NOT has(P.VISITED_SEQ, C.PKT_SEQ)
+),
+
+BASE_CONNECT_ONEWAY AS
+(
+    SELECT
+        P.SIP,
+        P.DIP,
+        P.NSPORT,
+        P.NDPORT,
+        P.CNT,
+
+        P.SIP     AS ROOT_SIP,
+        P.NSPORT  AS ROOT_SPORT,
+        P.DIP     AS ROOT_DIP,
+        P.NDPORT  AS ROOT_DPORT,
+
+        toUInt64(1) AS LV
+
+    FROM PKT1M AS P
+
+    LEFT ANTI JOIN
+    (
+        SELECT DISTINCT
+            SIP,
+            DIP,
+            NSPORT,
+            NDPORT
+        FROM BASE_CONNECT_TWOWAY
+    ) AS T
+        ON  T.SIP     = P.SIP
+        AND T.DIP     = P.DIP
+        AND T.NSPORT  = P.NSPORT
+        AND T.NDPORT  = P.NDPORT
+),
+
+BASE_CONNECT_UNION AS
+(
+    SELECT
+        SIP,
+        DIP,
+        NSPORT,
+        NDPORT,
+        CNT,
+        ROOT_SIP,
+        ROOT_SPORT,
+        ROOT_DIP,
+        ROOT_DPORT,
+        LV
+    FROM BASE_CONNECT_TWOWAY
+
+    UNION ALL
+
+    SELECT
+        SIP,
+        DIP,
+        NSPORT,
+        NDPORT,
+        CNT,
+        ROOT_SIP,
+        ROOT_SPORT,
+        ROOT_DIP,
+        ROOT_DPORT,
+        LV
+    FROM BASE_CONNECT_ONEWAY
+),
+
+BASE_CONNECT_RESULT AS
+(
+    SELECT
+        ROOT_SIP   AS SIP,
+        ROOT_DIP   AS DIP,
+        ROOT_SPORT AS NSPORT,
+        ROOT_DPORT AS NDPORT,
+        SUM(CNT)   AS SUM_CNT
+
+    FROM BASE_CONNECT_UNION
+
+    GROUP BY
+        ROOT_SIP,
+        ROOT_DIP,
+        ROOT_SPORT,
+        ROOT_DPORT
+)
+
+SELECT *
+FROM BASE_CONNECT_RESULT
+
+SETTINGS
+    max_recursive_cte_evaluation_depth = 30000;
+마지막 재귀 쿼리는 PKT_SEQ가 유일하고 관련 컬럼에 NULL이 없다는 전제입니다. 실제 서버 설정은 다음으로 확인할 수 있습니다.
