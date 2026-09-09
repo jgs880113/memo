@@ -1,0 +1,84 @@
+WITH BASE_NORMALIZED AS
+(
+    SELECT
+        CASE
+            WHEN SIP <= DIP THEN SIP
+            ELSE DIP
+        END AS GROUP_SIP,
+
+        CASE
+            WHEN SIP <= DIP THEN DIP
+            ELSE SIP
+        END AS GROUP_DIP,
+
+        CASE
+            WHEN SIP <= DIP THEN NSPORT
+            ELSE NDPORT
+        END AS GROUP_SPORT,
+
+        CASE
+            WHEN SIP <= DIP THEN NDPORT
+            ELSE NSPORT
+        END AS GROUP_DPORT,
+
+        CASE
+            WHEN SIP < DIP THEN 1
+            ELSE 0
+        END AS IS_FORWARD,
+
+        CNT
+    FROM PKT1M
+),
+
+BASE_GROUP AS
+(
+    SELECT
+        GROUP_SIP,
+        GROUP_DIP,
+        GROUP_SPORT,
+        GROUP_DPORT,
+
+        MAX(IS_FORWARD) AS HAS_FORWARD,
+        SUM(CNT)        AS SUM_CNT
+
+    FROM BASE_NORMALIZED
+
+    GROUP BY
+        GROUP_SIP,
+        GROUP_DIP,
+        GROUP_SPORT,
+        GROUP_DPORT
+)
+
+SELECT
+    CASE
+        WHEN HAS_FORWARD = 1
+          OR GROUP_SIP = GROUP_DIP
+        THEN GROUP_SIP
+        ELSE GROUP_DIP
+    END AS SIP,
+
+    CASE
+        WHEN HAS_FORWARD = 1
+          OR GROUP_SIP = GROUP_DIP
+        THEN GROUP_DIP
+        ELSE GROUP_SIP
+    END AS DIP,
+
+    CASE
+        WHEN HAS_FORWARD = 1
+          OR GROUP_SIP = GROUP_DIP
+        THEN GROUP_SPORT
+        ELSE GROUP_DPORT
+    END AS NSPORT,
+
+    CASE
+        WHEN HAS_FORWARD = 1
+          OR GROUP_SIP = GROUP_DIP
+        THEN GROUP_DPORT
+        ELSE GROUP_SPORT
+    END AS NDPORT,
+
+    SUM_CNT
+
+FROM BASE_GROUP;
