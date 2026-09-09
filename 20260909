@@ -135,3 +135,15 @@ ORDER BY pk_column;
 | `7B`, `5B` | JSON 가능성 |
 | `3C` | XML 가능성 |
   
+
+
+<foreach collection="patterns"
+         item="pattern"
+         open="("
+         separator=" OR "
+         close=")">
+    match(
+        unhex(sdata),
+        concat('(?i-s)', #{pattern})
+    )
+</foreach>
