@@ -294,3 +294,25 @@ WHERE sdata IS NOT NULL
 3. Oracle NLS_CHARACTERSET
 4. Oracle·ClickHouse·Impala 각각의 일치 건수
 특히 header_hex만으로 포맷이 확정되지 않을 수 있으므로 가능하면 서로 다른 행 10~20건을 가져오는 것이 좋습니다.
+
+
+-- Oracle
+REGEXP_LIKE(
+    UTL_I18N.RAW_TO_CHAR(HEXTORAW(sdata), 'AL32UTF8'),
+    'your_pattern',
+    'i'
+)
+
+-- ClickHouse
+match(
+    unhex(sdata),
+    '(?i-s)your_pattern'
+)
+
+-- Impala
+REGEXP_LIKE(
+    UNHEX(sdata),
+    'your_pattern',
+    'i'
+)
+
