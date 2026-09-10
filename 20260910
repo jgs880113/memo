@@ -2,3 +2,29 @@ SELECT UTL_RAW.CAST_TO_VARCHAR2(
            UTL_RAW.CONVERT(your_raw_column, 'KO16MSWIN949', 'AL32UTF8')
        ) AS converted_text
 FROM your_table;
+
+
+SELECT UTL_RAW.CAST_TO_VARCHAR2(
+           UTL_RAW.CONVERT(
+               your_raw_column,
+               'KO16MSWIN949',
+               'AL32UTF8'
+           )
+       ) AS converted_text
+FROM your_table;
+
+SELECT UTL_RAW.CAST_TO_VARCHAR2(
+           UTL_RAW.CONVERT(
+               HEXTORAW(sdata),
+               'KO16MSWIN949',
+               'AL32UTF8'
+           )
+       ) AS converted_text
+FROM your_table;
+
+
+SELECT UTL_I18N.RAW_TO_CHAR(
+           HEXTORAW(sdata),
+           'AL32UTF8'
+       ) AS converted_text
+FROM your_table;
